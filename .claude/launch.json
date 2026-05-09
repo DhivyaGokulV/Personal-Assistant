@@ -1,0 +1,32 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "backend/src/PersonalAssistant.Api",
+        "--launch-profile",
+        "http"
+      ],
+      "port": 5024
+    },
+    {
+      "name": "frontend-ui",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "frontend/personal-assistant-ui",
+        "start",
+        "--",
+        "--port",
+        "4200",
+        "--host",
+        "127.0.0.1"
+      ],
+      "port": 4200
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+// CSS custom properties for theming. Light theme on :root; dark theme overrides
+// kick in when [data-theme="dark"] is set on <html>.
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f8f9fc;
+  --surface-elevated: #ffffff;
+  --fg: #1a1d29;
+  --fg-muted: #5b6578;
+  --fg-subtle: #8893a8;
+  --border: rgba(20, 24, 40, 0.08);
+  --border-strong: rgba(20, 24, 40, 0.16);
+
+  --primary: #6c5ce7;
+  --primary-soft: rgba(108, 92, 231, 0.12);
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --danger: #e74c3c;
+
+  --neon: #ff2bd6;
+  --neon-soft: rgba(255, 43, 214, 0.45);
+  --neon-cyan: #08fdd8;
+  --neon-cyan-soft: rgba(8, 253, 216, 0.45);
+
+  --shadow-soft: 0 1px 2px rgba(20, 24, 40, 0.06), 0 4px 12px rgba(20, 24, 40, 0.04);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+[data-theme="dark"] {
+  --bg: #0b0d14;
+  --surface: #11141d;
+  --surface-2: #161a26;
+  --surface-elevated: #1a1f2e;
+  --fg: #e6e8ef;
+  --fg-muted: #9aa3b8;
+  --fg-subtle: #6e7691;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --primary: #8c7dff;
+  --primary-soft: rgba(140, 125, 255, 0.16);
+  --success: #2ee6a8;
+  --warning: #ffd479;
+  --danger: #ff6b5b;
+
+  --neon: #ff5cd9;
+  --neon-soft: rgba(255, 92, 217, 0.55);
+  --neon-cyan: #38fbdf;
+  --neon-cyan-soft: rgba(56, 251, 223, 0.55);
+
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.35);
+}

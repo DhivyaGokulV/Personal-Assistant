@@ -1,0 +1,26 @@
+@mixin neon-border($color: var(--neon), $soft: var(--neon-soft)) {
+  border: 1px solid $color;
+  box-shadow: 0 0 10px $soft, inset 0 0 6px rgba(255, 255, 255, 0.04);
+}
+
+.neon {
+  @include neon-border();
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.neon:hover {
+  box-shadow: 0 0 18px var(--neon-soft), inset 0 0 8px rgba(255, 255, 255, 0.05);
+}
+
+.neon-cyan {
+  @include neon-border(var(--neon-cyan), var(--neon-cyan-soft));
+  background: var(--surface);
+  border-radius: var(--radius-md);
+}
+
+.neon-text {
+  color: var(--neon);
+  text-shadow: 0 0 6px var(--neon-soft);
+}

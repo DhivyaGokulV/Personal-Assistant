@@ -1,0 +1,159 @@
+# =====================================================================
+# Personal Assistant — combined .NET + Node/Angular ignore
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+.idea/
+.vs/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+
+# ---------------------------------------------------------------------
+# .NET / EF Core / Rider / Visual Studio
+# ---------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+build/
+bld/
+
+*.user
+*.userosscache
+*.userprefs
+*.sln.docstates
+*.suo
+*.ncrunch*
+*.cache
+*.opendb
+*.VC.db
+*.VC.opendb
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+TestResults/
+coverage/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+*.trx
+*.cobertura.xml
+*.opencover.xml
+
+# Publish / build artifacts
+publish/
+PublishProfiles/
+*.pubxml
+*.pubxml.user
+*.publishproj
+*.azurePubxml
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# ---------------------------------------------------------------------
+# Application data — never commit local DBs / migration scratch
+# ---------------------------------------------------------------------
+*.db
+*.db-shm
+*.db-wal
+personal-assistant.db
+personal-assistant.dev.db
+
+# ---------------------------------------------------------------------
+# Secrets / config overrides
+# ---------------------------------------------------------------------
+appsettings.Development.local.json
+appsettings.Production.json
+appsettings.*.local.json
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+secrets.json
+
+# ---------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------
+*.log
+logs/
+log/
+Log*.txt
+
+# ---------------------------------------------------------------------
+# Node / Angular
+# ---------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp/
+.pnp.js
+.pnp.cjs
+.pnp.loader.mjs
+
+# Angular CLI build output
+frontend/personal-assistant-ui/dist/
+frontend/personal-assistant-ui/.angular/
+**/dist/
+**/.angular/
+**/.cache/
+.parcel-cache/
+
+# Test / coverage
+karma-results/
+junit.xml
+*.spec.js.snap
+
+# ---------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Generated files
+*.generated.cs
+*.g.cs
+*.g.i.cs
+*.designer.cs

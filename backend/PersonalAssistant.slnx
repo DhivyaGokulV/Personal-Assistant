@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/migrations/">
+    <Project Path="migrations/PersonalAssistant.Migrations.Sqlite/PersonalAssistant.Migrations.Sqlite.csproj" />
+    <Project Path="migrations/PersonalAssistant.Migrations.SqlServer/PersonalAssistant.Migrations.SqlServer.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PersonalAssistant.Api/PersonalAssistant.Api.csproj" />
+    <Project Path="src/PersonalAssistant.Application/PersonalAssistant.Application.csproj" />
+    <Project Path="src/PersonalAssistant.Domain/PersonalAssistant.Domain.csproj" />
+    <Project Path="src/PersonalAssistant.Infrastructure/PersonalAssistant.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PersonalAssistant.Tests/PersonalAssistant.Tests.csproj" />
+  </Folder>
+</Solution>
