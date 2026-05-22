@@ -6,6 +6,10 @@ import { HomeComponent } from './features/home/home.component';
 import { TaskManagementShellComponent } from './features/task-management/task-management-shell.component';
 import { FinanceShellComponent } from './features/finance/finance-shell.component';
 import { AssetTrackerShellComponent } from './features/asset-tracker/asset-tracker-shell.component';
+import { TimeTrackerComponent } from './features/time-tracker/time-tracker.component';
+import { HealthComponent } from './features/health/health.component';
+import { GoalsComponent } from './features/goals/goals.component';
+import { PasswordVaultComponent } from './features/password-vault/password-vault.component';
 import { ShellComponent } from './layout/shell.component';
 
 export const routes: Routes = [
@@ -20,7 +24,11 @@ export const routes: Routes = [
       { path: 'home', component: HomeComponent },
       { path: 'tasks', component: TaskManagementShellComponent },
       { path: 'finance', component: FinanceShellComponent },
-      { path: 'assets', component: AssetTrackerShellComponent }
+      { path: 'assets', component: AssetTrackerShellComponent },
+      { path: 'time', component: TimeTrackerComponent },
+      { path: 'health', component: HealthComponent },
+      { path: 'goals', component: GoalsComponent },
+      { path: 'passwords', component: PasswordVaultComponent }
     ]
   },
   { path: '**', redirectTo: 'home' }

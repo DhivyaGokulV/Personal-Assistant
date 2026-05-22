@@ -47,7 +47,6 @@ interface ModuleTile {
   styles: [`
     .home-shell { min-height: calc(100vh - 56px); background: var(--bg); }
     .page-title { font-size: 1.6rem; font-weight: 600; margin: 0; }
-
     .tile {
       display: flex;
       flex-direction: column;
@@ -60,13 +59,9 @@ interface ModuleTile {
       position: relative;
       overflow: hidden;
     }
-    .tile-icon {
-      font-size: 1.6rem;
-      line-height: 1;
-    }
+    .tile-icon { font-size: 1.1rem; line-height: 1; font-weight: 700; color: var(--neon-cyan); }
     .tile-title { font-weight: 600; font-size: 1.05rem; }
     .tile-desc { font-size: 0.85rem; color: var(--fg-muted); }
-
     .tile-disabled {
       background: var(--surface);
       border: 1px dashed var(--border-strong);
@@ -90,12 +85,13 @@ interface ModuleTile {
 })
 export class HomeComponent {
   readonly tiles: ModuleTile[] = [
-    { title: 'Task Management', description: 'Daily, periodic and to-do tasks', icon: '✓', route: '/tasks', enabled: true },
-    { title: 'Finance Management', description: 'Track spending and budgets', icon: '$', route: '/finance', enabled: true },
-    { title: 'Asset Tracker', description: 'Assets, investments, liabilities', icon: '◇', route: '/assets', enabled: true },
-    { title: 'Time Tracker', description: 'Where your hours go', icon: '⏱', route: null, enabled: false },
-    { title: 'Health & Workouts', description: 'Movement, sleep, vitals', icon: '♥', route: null, enabled: false },
-    { title: 'Goal Tracker', description: 'Long-term objectives', icon: '◎', route: null, enabled: false },
-    { title: 'Notes', description: 'Quick capture and longform', icon: '✎', route: null, enabled: false }
+    { title: 'Task Management', description: 'Daily, periodic and to-do tasks', icon: 'OK', route: '/tasks', enabled: true },
+    { title: 'Finance Management', description: 'Track spending and budgets', icon: 'INR', route: '/finance', enabled: true },
+    { title: 'Asset Tracker', description: 'Assets, investments, liabilities', icon: 'AS', route: '/assets', enabled: true },
+    { title: 'Time Tracker', description: 'Where your hours go', icon: 'TM', route: '/time', enabled: true },
+    { title: 'Health & Workouts', description: 'Movement, nutrition, measurements', icon: 'HL', route: '/health', enabled: true },
+    { title: 'Goal Tracker', description: 'Plans, goals and steps', icon: 'GO', route: '/goals', enabled: true },
+    { title: 'Passwords', description: 'Client-encrypted vault', icon: 'PW', route: '/passwords', enabled: true },
+    { title: 'Notes', description: 'Quick capture and longform', icon: 'NT', route: null, enabled: false }
   ];
 }

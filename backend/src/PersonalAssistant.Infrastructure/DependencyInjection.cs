@@ -16,9 +16,13 @@ using PersonalAssistant.Application.Finance.Budgets;
 using PersonalAssistant.Application.Finance.Dashboard;
 using PersonalAssistant.Application.Finance.Settings;
 using PersonalAssistant.Application.Finance.Transactions;
+using PersonalAssistant.Application.Goals;
+using PersonalAssistant.Application.Health;
+using PersonalAssistant.Application.PasswordVault;
 using PersonalAssistant.Application.Tasks.Daily;
 using PersonalAssistant.Application.Tasks.Periodic;
 using PersonalAssistant.Application.Tasks.Todo;
+using PersonalAssistant.Application.TimeTracker;
 using PersonalAssistant.Domain.Identity;
 using PersonalAssistant.Infrastructure.AssetTracker.Assets;
 using PersonalAssistant.Infrastructure.AssetTracker.Common;
@@ -30,11 +34,15 @@ using PersonalAssistant.Infrastructure.Finance.Budgets;
 using PersonalAssistant.Infrastructure.Finance.Dashboard;
 using PersonalAssistant.Infrastructure.Finance.Settings;
 using PersonalAssistant.Infrastructure.Finance.Transactions;
+using PersonalAssistant.Infrastructure.Goals;
+using PersonalAssistant.Infrastructure.Health;
+using PersonalAssistant.Infrastructure.PasswordVault;
 using PersonalAssistant.Infrastructure.Persistence;
 using PersonalAssistant.Infrastructure.Reports;
 using PersonalAssistant.Infrastructure.Tasks.Daily;
 using PersonalAssistant.Infrastructure.Tasks.Periodic;
 using PersonalAssistant.Infrastructure.Tasks.Todo;
+using PersonalAssistant.Infrastructure.TimeTracker;
 
 namespace PersonalAssistant.Infrastructure;
 
@@ -90,6 +98,11 @@ public static class DependencyInjection
         services.AddScoped<IInvestmentService, InvestmentService>();
         services.AddScoped<ILiabilityService, LiabilityService>();
         services.AddScoped<IAssetTrackerDashboardService, AssetTrackerDashboardService>();
+
+        services.AddScoped<ITimeTrackerService, TimeTrackerService>();
+        services.AddScoped<IHealthService, HealthService>();
+        services.AddScoped<IGoalService, GoalService>();
+        services.AddScoped<IPasswordVaultService, PasswordVaultService>();
 
         services.AddSingleton<IReportExportService, ReportExportService>();
 

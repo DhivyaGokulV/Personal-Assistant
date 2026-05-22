@@ -1,171 +1,113 @@
 # Personal Assistant
 
-A self-hosted productivity app: a single user account, a dashboard of modules, and a focus on quick capture and clean reporting. Built as a .NET 10 / EF Core backend with an Angular + Bootstrap frontend.
+A self-hosted productivity app with authenticated modules for tasks, finance, assets, time tracking, health, goals, and a client-encrypted password vault. Built with a .NET 10 / EF Core backend and an Angular + Bootstrap frontend.
 
 ## Modules
 
 | Module | Status | What's inside |
 |---|---|---|
-| **Task Management** | Built | Daily Tasks, Periodic Tasks, To-Do List — each with reports (HTML / PDF / Excel / CSV) |
-| **Finance Management** | Built | Dashboard, Expense Tracker, Budget, Settings (accounts / categories / payment types / tags) |
-| Asset Tracker | Coming soon | — |
-| Time Tracker | Coming soon | — |
-| Health & Workouts | Coming soon | — |
-| Goal Tracker | Coming soon | — |
-| Notes | Coming soon | — |
+| Task Management | Built | Daily Tasks, Periodic Tasks, To-Do List, reports |
+| Finance Management | Built | Dashboard, Expense Tracker, Budget, Settings |
+| Asset Tracker | Built | Dashboard, Assets, Investments, Liabilities |
+| Time Tracker | Built | Calendar-style daily view, CRUD, filters, reports |
+| Health & Nutrition | Built | Measurements, workouts, nutrition, settings, reports |
+| Goal Tracker | Built | Goal plans, goals, steps, reports |
+| Passwords | Built | Client-side encrypted password groups and entries |
+| Notes | Coming soon | Not included in this batch |
 
-## Tech stack
+## Tech Stack
 
-- **Backend** — .NET 10, ASP.NET Core Web API, EF Core 10 with **dual provider** (SQLite + SQL Server) chosen at startup, ASP.NET Identity + JWT, Swagger, Serilog
-- **Frontend** — Angular 21 (standalone APIs, signals, control-flow templates), Bootstrap 5 + custom SCSS theme tokens (light / dark), neon utility classes
-- **Reports** — QuestPDF (PDF), ClosedXML (Excel), CsvHelper (CSV), abstracted behind a single `IReportExportService`
-- **Persistence** — Soft delete on every domain entity via a SaveChanges interceptor; per-user data isolation via `OwnerUserId` filter
+- Backend: .NET 10, ASP.NET Core Web API, C#, EF Core 10, ASP.NET Identity + JWT, Swagger, Serilog
+- Frontend: Angular 21 standalone components, TypeScript, Bootstrap 5, Reactive Forms for new modules, Observables for HTTP calls
+- Database: SQLite by default, SQL Server optional; each provider has its own migrations project
+- Reports: CSV, Excel, PDF, and JSON via the shared `IReportExportService`
+- Theme: responsive light/dark UI with neon border utilities
 
-## Repository layout
-
-```
-.
-├── backend/
-│   ├── PersonalAssistant.sln
-│   ├── src/
-│   │   ├── PersonalAssistant.Api/            # Web host, controllers, Program.cs, Swagger
-│   │   ├── PersonalAssistant.Domain/         # Entities, enums (no external deps beyond Identity stores)
-│   │   ├── PersonalAssistant.Application/    # DTOs, service interfaces, report contracts
-│   │   └── PersonalAssistant.Infrastructure/ # DbContext, EF configurations, service impls, JWT, exporters
-│   ├── migrations/
-│   │   ├── PersonalAssistant.Migrations.Sqlite/
-│   │   └── PersonalAssistant.Migrations.SqlServer/
-│   └── tests/PersonalAssistant.Tests/
-└── frontend/
-    └── personal-assistant-ui/                # Angular workspace
-```
-
-## Prerequisites
-
-- **.NET SDK 10** (`dotnet --version` ≥ `10.0.x`)
-- **Node 20+** and **npm** (Node 25 works but is not officially supported by Angular)
-- **Angular CLI 21** (`npm i -g @angular/cli`)
-- *(Optional, only if you switch to SQL Server)* SQL Server LocalDB or any reachable SQL Server instance
-
-## First-time setup
-
-```powershell
-# From the repository root
-cd backend
-dotnet restore
-dotnet build
-
-cd ..\frontend\personal-assistant-ui
-npm install
-```
-
-The backend auto-applies migrations on startup, so there is no manual `database update` step in normal use.
-
-## Running locally
+## Running Locally
 
 Open two terminals.
 
-**Terminal 1 — Backend** (defaults to SQLite at `./personal-assistant.db`):
+Backend:
+
 ```powershell
 cd backend\src\PersonalAssistant.Api
 dotnet run --launch-profile http
 ```
-- API: <http://localhost:5024>
-- Swagger: <http://localhost:5024/swagger>
 
-**Terminal 2 — Frontend**:
+- API: `http://localhost:5024`
+- Swagger: `http://localhost:5024/swagger`
+
+Frontend:
+
 ```powershell
 cd frontend\personal-assistant-ui
-ng serve --port 4200 --host 127.0.0.1
+npm install
+npm.cmd run start -- --port 4200 --host 127.0.0.1
 ```
-- UI: <http://127.0.0.1:4200>
 
-Open the UI, register an account, and you're in.
+- UI: `http://127.0.0.1:4200`
 
-## Switching between SQLite and SQL Server
+The API auto-applies migrations on startup.
+
+## Database Provider
 
 Edit `backend/src/PersonalAssistant.Api/appsettings.json`:
 
 ```jsonc
 "Database": {
-  "Provider": "Sqlite",   // "Sqlite" or "SqlServer"
+  "Provider": "Sqlite",
   "ConnectionStrings": {
-    "Sqlite":    "Data Source=personal-assistant.db",
+    "Sqlite": "Data Source=personal-assistant.db",
     "SqlServer": "Server=(localdb)\\MSSQLLocalDB;Database=PersonalAssistant;Trusted_Connection=True;Encrypt=False;"
   }
 }
 ```
 
-Each provider has its own migrations project, so the schema stays in lockstep on both:
+Generate migrations for both providers after model changes:
 
 ```powershell
-# After adding a new entity, generate migrations for both providers.
 cd backend
-dotnet ef migrations add MyChange `
-  --project migrations/PersonalAssistant.Migrations.Sqlite `
-  --startup-project migrations/PersonalAssistant.Migrations.Sqlite `
-  --context AppDbContext
-
-dotnet ef migrations add MyChange `
-  --project migrations/PersonalAssistant.Migrations.SqlServer `
-  --startup-project migrations/PersonalAssistant.Migrations.SqlServer `
-  --context AppDbContext
+dotnet ef migrations add MyChange --project migrations/PersonalAssistant.Migrations.Sqlite --startup-project migrations/PersonalAssistant.Migrations.Sqlite --context AppDbContext
+dotnet ef migrations add MyChange --project migrations/PersonalAssistant.Migrations.SqlServer --startup-project migrations/PersonalAssistant.Migrations.SqlServer --context AppDbContext
 ```
 
-## Authentication
+## Security Notes
 
-- Open registration is enabled (`POST /api/auth/register`).
-- Login (`POST /api/auth/login`) returns a JWT; the frontend stores it in `localStorage` and sends it via an HTTP interceptor.
-- `GET /api/auth/me` returns the current user.
-- All non-auth endpoints require `[Authorize]` and are scoped to the JWT subject (`OwnerUserId`).
+- All non-auth API endpoints require JWT auth and service queries filter by `OwnerUserId`.
+- Domain entities use soft delete through the SaveChanges interceptor.
+- Password vault secrets are encrypted in the browser with Web Crypto AES-GCM using a separate master password and PBKDF2-derived key.
+- The API stores ciphertext, IVs, salt, and verifier metadata only. It cannot recover vault contents if the master password is lost.
+- Do not put production JWT signing keys or password-vault master passwords in source control.
 
-In Swagger, click **Authorize** and paste the JWT (without the `Bearer ` prefix) to exercise authenticated endpoints.
+## Module Routes
 
-## Theme & look
+- `/tasks`
+- `/finance`
+- `/assets`
+- `/time`
+- `/health`
+- `/goals`
+- `/passwords`
 
-- Light/dark mode toggle is in the header. Preference is persisted to `localStorage` and respects the OS preference on first load.
-- Theming is driven by CSS custom properties in [`src/styles/_tokens.scss`](frontend/personal-assistant-ui/src/styles/_tokens.scss).
-- Neon borders are utility classes (`.neon`, `.neon-cyan`) layered on top of Bootstrap.
+## Currency
 
-## Module quick tour
+Finance and asset screens display money as Indian rupees using the shared frontend formatter in `finance.models.ts`.
 
-### Task Management (`/tasks`)
-
-Three tabs share the same shell. Each has a **Reports** button (CSV / Excel / PDF / on-screen).
-
-- **Daily Tasks** — Group recurring daily checklists. Per-day completion + note. Top counts strip + per-group counts. Reports: day-wise grid and task-wise summary.
-- **Periodic Tasks** — Tasks that repeat every N days/weeks/months/years. Track last-done, computed next-due (color-coded overdue/soon/ok), and a full history list with edit/delete.
-- **To-Do List** — One-off tasks with deadlines, status transitions (Incomplete / Not Started / In Progress / Almost Completed / Completed / Cancelled), counts strip, sortable by date / status / days-left.
-
-### Finance Management (`/finance`)
-
-- **Dashboard** — Pick a date range. See total starting standing (sum of account balances at the start of the period) vs. current standing, total credits / debits in range, plus per-category / per-account / per-payment-type / per-tag breakdowns with proportional bars.
-- **Expense Tracker** — All transactions with rich filters (date / account / category / payment type / tag / type / search) and pagination. Add Credit/Debit transactions or **Self Transfers** (which create two linked legs sharing a `TransferGroupId` and clean up together). When filtered by a single account, each row shows its running **Account Standing**. Reports for the selected period in CSV / Excel / PDF.
-- **Budget** — Allocate per-category amounts over a custom date range. **Spent** is computed automatically from your transactions; remaining + percent-used + a progress bar (red when over budget). Per-budget detail view + CSV / Excel / PDF download.
-- **Settings** — Sub-tabs for Accounts (with opening balance + opening date + active/inactive), Categories (Need / Want / Saving), Payment Types, and Tags (with color picker for visual identity).
-
-## Common operations
+## Verification
 
 ```powershell
-# Run backend tests
 cd backend
 dotnet test
 
-# Build production frontend
-cd frontend\personal-assistant-ui
-ng build --configuration=production
+cd ..\frontend\personal-assistant-ui
+npm.cmd run build
 ```
 
-## Design notes
-
-- **Soft delete** — Every domain entity inherits `EntityBase` with `IsDeleted`. A SaveChanges interceptor flips `IsDeleted=true` instead of removing rows, and global query filters hide them. History rows in reports therefore stay accurate even after a task is "deleted" from the UI.
-- **Tenancy** — Every query filters on `OwnerUserId` taken from the JWT claim, in addition to the `[Authorize]` attribute, as defense-in-depth.
-- **Self-transfer model** — A self-transfer is two real `Transaction` rows (a Debit on the source account, a Credit on the destination) joined by a single `TransferGroupId`. The dashboard's category / payment / tag aggregates exclude transfer legs (they net to zero across your own accounts), but the per-account view *includes* them so each account's flow is faithful.
-- **Reports** — All four feature areas (Daily, Periodic, To-Do, Finance) push through the same `IReportExportService` taking a generic `ReportTable { Title, Columns, Rows }`. Adding a new report = build a `ReportTable` in your service and route it through the controller.
+Current known frontend build warnings are Angular/Sass diagnostics already present in the project plus a bundle budget warning after adding the new modules.
 
 ## Troubleshooting
 
-- **"The Entity Framework tools version is older than the runtime"** — harmless warning. To silence it: `dotnet tool update -g dotnet-ef`.
-- **Port already in use** — kill any orphaned `dotnet` or `node` processes, or change ports in `launchSettings.json` (backend) and your `ng serve --port` flag (frontend). Update `apiBaseUrl` in `src/environments/environment.ts` if you change the API port.
-- **CORS errors** — the backend allows only `http://localhost:4200` in development. If you serve the frontend from a different origin, edit the CORS policy in `Program.cs`.
-- **JWT signing key warnings** — for production, replace the `Jwt:SigningKey` in `appsettings.json` with a long random string (≥ 32 chars) and inject it through user secrets / environment variables.
+- CORS: in Development, the API allows `localhost` and `127.0.0.1` origins on any port with credentials, so `localhost:4200`, `127.0.0.1:4200`, and alternate local ports are supported.
+- PowerShell npm policy: use `npm.cmd` if `npm.ps1` is blocked by execution policy.
+- EF tools warning: if the EF CLI version is older than runtime, update with `dotnet tool update -g dotnet-ef`; the warning is usually harmless for local builds.
+- Port already in use: change the Angular port or backend launch profile port, and update `apiBaseUrl` in `src/environments/environment.ts` if the API port changes.

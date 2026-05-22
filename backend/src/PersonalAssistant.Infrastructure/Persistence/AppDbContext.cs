@@ -2,10 +2,14 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using PersonalAssistant.Domain.AssetTracker;
 using PersonalAssistant.Domain.Finance;
+using PersonalAssistant.Domain.Goals;
+using PersonalAssistant.Domain.Health;
 using PersonalAssistant.Domain.Identity;
+using PersonalAssistant.Domain.PasswordVault;
 using PersonalAssistant.Domain.Tasks.Daily;
 using PersonalAssistant.Domain.Tasks.Periodic;
 using PersonalAssistant.Domain.Tasks.Todo;
+using PersonalAssistant.Domain.TimeTracker;
 
 namespace PersonalAssistant.Infrastructure.Persistence;
 
@@ -41,6 +45,25 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<InvestmentTransaction> InvestmentTransactions => Set<InvestmentTransaction>();
     public DbSet<Liability> Liabilities => Set<Liability>();
     public DbSet<LiabilityHistory> LiabilityHistory => Set<LiabilityHistory>();
+
+    public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+
+    public DbSet<MeasurementEntry> MeasurementEntries => Set<MeasurementEntry>();
+    public DbSet<WorkoutDefinition> WorkoutDefinitions => Set<WorkoutDefinition>();
+    public DbSet<WorkoutEntry> WorkoutEntries => Set<WorkoutEntry>();
+    public DbSet<WorkoutSet> WorkoutSets => Set<WorkoutSet>();
+    public DbSet<FoodDefinition> FoodDefinitions => Set<FoodDefinition>();
+    public DbSet<NutritionEntry> NutritionEntries => Set<NutritionEntry>();
+    public DbSet<NutritionGoal> NutritionGoals => Set<NutritionGoal>();
+
+    public DbSet<GoalPlan> GoalPlans => Set<GoalPlan>();
+    public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<GoalStep> GoalSteps => Set<GoalStep>();
+
+    public DbSet<PasswordVaultSetting> PasswordVaultSettings => Set<PasswordVaultSetting>();
+    public DbSet<PasswordGroup> PasswordGroups => Set<PasswordGroup>();
+    public DbSet<PasswordEntry> PasswordEntries => Set<PasswordEntry>();
+    public DbSet<PasswordHistory> PasswordHistory => Set<PasswordHistory>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
