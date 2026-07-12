@@ -92,6 +92,7 @@ export class HomeComponent {
     { title: 'Health & Workouts', description: 'Movement, nutrition, measurements', icon: 'HL', route: '/health', enabled: true },
     { title: 'Goal Tracker', description: 'Plans, goals and steps', icon: 'GO', route: '/goals', enabled: true },
     { title: 'Passwords', description: 'Client-encrypted vault', icon: 'PW', route: '/passwords', enabled: true },
+    { title: 'Wardrobe Manager', description: 'Organize outfits and clothing', icon: 'WM', route: null, enabled: false },
     { title: 'Notes', description: 'Quick capture and longform', icon: 'NT', route: null, enabled: false }
   ];
 }

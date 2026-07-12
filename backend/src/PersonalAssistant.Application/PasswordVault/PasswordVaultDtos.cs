@@ -1,7 +1,41 @@
 namespace PersonalAssistant.Application.PasswordVault;
 
-public record PasswordVaultStatusDto(bool IsInitialized, string? Salt, string? VerifierCipherText, string? VerifierIv, int? KdfIterations);
-public record InitializeVaultRequest(string Salt, string VerifierCipherText, string VerifierIv, int KdfIterations);
+public record PasswordVaultStatusDto(
+    bool IsInitialized,
+    string? Salt,
+    string? VerifierCipherText,
+    string? VerifierIv,
+    int? KdfIterations,
+    string? MasterWrappedKeyCipherText = null,
+    string? MasterWrappedKeyIv = null,
+    string? RecoverySalt = null,
+    string? RecoveryVerifierCipherText = null,
+    string? RecoveryVerifierIv = null,
+    string? RecoveryWrappedKeyCipherText = null,
+    string? RecoveryWrappedKeyIv = null,
+    int? RecoveryKdfIterations = null);
+
+public record InitializeVaultRequest(
+    string Salt,
+    string VerifierCipherText,
+    string VerifierIv,
+    int KdfIterations,
+    string? MasterWrappedKeyCipherText = null,
+    string? MasterWrappedKeyIv = null,
+    string? RecoverySalt = null,
+    string? RecoveryVerifierCipherText = null,
+    string? RecoveryVerifierIv = null,
+    string? RecoveryWrappedKeyCipherText = null,
+    string? RecoveryWrappedKeyIv = null,
+    int? RecoveryKdfIterations = null);
+
+public record ResetMasterPasswordRequest(
+    string Salt,
+    string VerifierCipherText,
+    string VerifierIv,
+    int KdfIterations,
+    string MasterWrappedKeyCipherText,
+    string MasterWrappedKeyIv);
 
 public record EncryptedFieldDto(string CipherText, string Iv);
 
@@ -25,6 +59,7 @@ public interface IPasswordVaultService
 {
     Task<PasswordVaultStatusDto> GetStatusAsync(CancellationToken ct);
     Task<PasswordVaultStatusDto> InitializeAsync(InitializeVaultRequest req, CancellationToken ct);
+    Task<PasswordVaultStatusDto> ResetMasterPasswordAsync(ResetMasterPasswordRequest req, CancellationToken ct);
     Task<IReadOnlyList<PasswordGroupDto>> ListGroupsAsync(CancellationToken ct);
     Task<PasswordGroupDto> CreateGroupAsync(PasswordGroupRequest req, CancellationToken ct);
     Task<PasswordGroupDto> UpdateGroupAsync(Guid id, PasswordGroupRequest req, CancellationToken ct);

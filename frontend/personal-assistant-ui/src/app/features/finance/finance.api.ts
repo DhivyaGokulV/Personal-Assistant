@@ -109,10 +109,10 @@ export class FinanceApi {
   // ===== Budgets =====
   listBudgets(): Observable<Budget[]> { return this.http.get<Budget[]>(`${this.base}/budgets`); }
   getBudget(id: string): Observable<Budget> { return this.http.get<Budget>(`${this.base}/budgets/${id}`); }
-  createBudget(body: { name: string; categoryId: string; amount: number; from: string; to: string; note?: string | null }) {
+  createBudget(body: { name: string; categoryId: string; amount: number; from: string; to: string; note?: string | null; entries?: { categoryId: string; amount: number }[] }) {
     return this.http.post<Budget>(`${this.base}/budgets`, body);
   }
-  updateBudget(id: string, body: { name: string; categoryId: string; amount: number; from: string; to: string; note?: string | null }) {
+  updateBudget(id: string, body: { name: string; categoryId: string; amount: number; from: string; to: string; note?: string | null; entries?: { categoryId: string; amount: number }[] }) {
     return this.http.put<Budget>(`${this.base}/budgets/${id}`, body);
   }
   deleteBudget(id: string) { return this.http.delete<void>(`${this.base}/budgets/${id}`); }

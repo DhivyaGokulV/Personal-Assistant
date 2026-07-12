@@ -266,6 +266,56 @@ public class HealthService : IHealthService
         return new NutritionReport(from, to, rows.Sum(x => x.Carbohydrates ?? 0), rows.Sum(x => x.Protein ?? 0), rows.Sum(x => x.Fat ?? 0), rows.Sum(x => x.Calories ?? 0), rows);
     }
 
+    public async Task<HealthPagedResult<WaterIntakeDto>> ListWaterAsync(DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct)
+    {
+        var q = _db.WaterIntakeEntries.Where(x => x.OwnerUserId == OwnerId);
+        if (from.HasValue) q = q.Where(x => x.Date >= from.Value);
+        if (to.HasValue) q = q.Where(x => x.Date <= to.Value);
+        var total = await q.CountAsync(ct);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var rows = await q.OrderByDescending(x => x.Date).ThenByDescending(x => x.Time)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(x => MapWater(x)).ToListAsync(ct);
+        return new HealthPagedResult<WaterIntakeDto>(rows, page, pageSize, total);
+    }
+
+    public async Task<WaterIntakeDto> CreateWaterAsync(WaterIntakeRequest req, CancellationToken ct)
+    {
+        ValidateWater(req);
+        var e = new WaterIntakeEntry { OwnerUserId = OwnerId, Date = req.Date, Time = req.Time, QuantityMl = req.QuantityMl, Note = req.Note?.Trim() };
+        _db.WaterIntakeEntries.Add(e);
+        await _db.SaveChangesAsync(ct);
+        return MapWater(e);
+    }
+
+    public async Task<WaterIntakeDto> UpdateWaterAsync(Guid id, WaterIntakeRequest req, CancellationToken ct)
+    {
+        ValidateWater(req);
+        var e = await _db.WaterIntakeEntries.FirstOrDefaultAsync(x => x.Id == id && x.OwnerUserId == OwnerId, ct)
+            ?? throw new KeyNotFoundException("Water intake entry not found.");
+        e.Date = req.Date; e.Time = req.Time; e.QuantityMl = req.QuantityMl; e.Note = req.Note?.Trim();
+        await _db.SaveChangesAsync(ct);
+        return MapWater(e);
+    }
+
+    public async Task DeleteWaterAsync(Guid id, CancellationToken ct)
+    {
+        var e = await _db.WaterIntakeEntries.FirstOrDefaultAsync(x => x.Id == id && x.OwnerUserId == OwnerId, ct)
+            ?? throw new KeyNotFoundException("Water intake entry not found.");
+        _db.WaterIntakeEntries.Remove(e);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<WaterReport> GetWaterReportAsync(DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        ValidateDateRange(from, to);
+        var rows = await _db.WaterIntakeEntries.Where(x => x.OwnerUserId == OwnerId && x.Date >= from && x.Date <= to)
+            .OrderBy(x => x.Date).ThenBy(x => x.Time)
+            .Select(x => MapWater(x)).ToListAsync(ct);
+        return new WaterReport(from, to, rows.Sum(x => x.QuantityMl), rows);
+    }
+
     private static void ValidateDateRange(DateOnly from, DateOnly to)
     {
         if (to < from) throw new ArgumentException("To date must be on/after From date.");
@@ -308,6 +358,11 @@ public class HealthService : IHealthService
         if (r.Quantity <= 0) throw new ArgumentException("Quantity must be positive.");
     }
 
+    private static void ValidateWater(WaterIntakeRequest r)
+    {
+        if (r.QuantityMl <= 0) throw new ArgumentException("Water quantity must be positive.");
+    }
+
     private static void ApplyMeasurement(MeasurementEntry e, MeasurementEntryRequest r)
     {
         e.Date = r.Date; e.HeightCm = r.HeightCm; e.WeightKg = r.WeightKg; e.Bmi = r.Bmi; e.BodyFatPercentage = r.BodyFatPercentage; e.MusclePercentage = r.MusclePercentage;
@@ -339,4 +394,5 @@ public class HealthService : IHealthService
     private static WorkoutEntryDto MapWorkout(WorkoutEntry x) => new(x.Id, x.Date, x.Type, x.WorkoutName, x.TargetedMuscle, x.Tag, x.DurationMinutes, x.Intensity, x.Distance, x.CaloriesBurned, x.Note, x.Sets.OrderBy(s => s.SetNumber).Select(s => new WorkoutSetDto(s.Id, s.SetNumber, s.Reps, s.Weight, s.AddedWeight)).ToList());
     private static FoodDefinitionDto MapFood(FoodDefinition x) => new(x.Id, x.Name, x.Unit, x.Carbohydrates, x.Protein, x.Fat, x.Calories);
     private static NutritionEntryDto MapNutrition(NutritionEntry x) => new(x.Id, x.Date, x.TimeOfDay, x.Food, x.Quantity, x.Unit, x.Carbohydrates, x.Protein, x.Fat, x.Calories, x.Note);
+    private static WaterIntakeDto MapWater(WaterIntakeEntry x) => new(x.Id, x.Date, x.Time, x.QuantityMl, x.Note);
 }

@@ -25,6 +25,14 @@ public class PasswordVaultController : ControllerBase
         catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
     }
 
+    [HttpPost("reset-master-password")]
+    public async Task<ActionResult<PasswordVaultStatusDto>> ResetMasterPassword([FromBody] ResetMasterPasswordRequest req, CancellationToken ct)
+    {
+        try { return Ok(await _service.ResetMasterPasswordAsync(req, ct)); }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     [HttpGet("groups")]
     public async Task<ActionResult<IReadOnlyList<PasswordGroupDto>>> ListGroups(CancellationToken ct)
         => Ok(await _service.ListGroupsAsync(ct));

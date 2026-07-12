@@ -11,7 +11,7 @@ public record TodoDto(
     int? DaysLeft,
     TodoStatus Status,
     DateOnly? CompletedOn,
-    string? CompletionNote);
+    string? StatusNote);
 
 public record CreateTodoRequest(
     string Title,
@@ -25,7 +25,7 @@ public record UpdateTodoRequest(
     DateOnly? Deadline,
     TodoStatus Status,
     DateOnly? CompletedOn,
-    string? CompletionNote);
+    string? StatusNote);
 
 public record TodoStatusCount(TodoStatus Status, int Count);
 public record TodoSummary(int Total, IReadOnlyList<TodoStatusCount> ByStatus);
@@ -37,9 +37,9 @@ public record TodoReportRow(
     int? DaysLeft,
     TodoStatus Status,
     DateOnly? CompletedOn,
-    string? CompletionNote);
+    string? StatusNote);
 
-public record TodoReport(DateOnly From, DateOnly To, IReadOnlyList<TodoReportRow> Rows);
+public record TodoReport(DateOnly AsOf, IReadOnlyList<TodoReportRow> Rows);
 
 public enum TodoSort
 {

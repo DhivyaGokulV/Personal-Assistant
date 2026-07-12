@@ -1,5 +1,10 @@
 export interface EncryptedField { cipherText: string; iv: string; }
-export interface VaultStatus { isInitialized: boolean; salt: string | null; verifierCipherText: string | null; verifierIv: string | null; kdfIterations: number | null; }
+export interface VaultStatus {
+  isInitialized: boolean; salt: string | null; verifierCipherText: string | null; verifierIv: string | null; kdfIterations: number | null;
+  masterWrappedKeyCipherText?: string | null; masterWrappedKeyIv?: string | null;
+  recoverySalt?: string | null; recoveryVerifierCipherText?: string | null; recoveryVerifierIv?: string | null;
+  recoveryWrappedKeyCipherText?: string | null; recoveryWrappedKeyIv?: string | null; recoveryKdfIterations?: number | null;
+}
 export interface PasswordGroup { id: string; name: string; description: string | null; entryCount: number; }
 export interface PasswordHistory { id: string; changeDate: string; previousPassword: EncryptedField; }
 export interface PasswordEntry {

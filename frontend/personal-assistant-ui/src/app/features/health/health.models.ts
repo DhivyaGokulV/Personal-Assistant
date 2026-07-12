@@ -10,3 +10,4 @@ export interface FoodDefinition { id: string; name: string; unit: string; carboh
 export interface NutritionEntry { id: string; date: string; timeOfDay: NutritionTimeOfDay; food: string; quantity: number; unit: string; carbohydrates: number | null; protein: number | null; fat: number | null; calories: number | null; note: string | null; }
 export interface NutritionGoal { id: string | null; carbohydrates: number | null; protein: number | null; fat: number | null; calories: number | null; }
 export interface NutritionDay { date: string; goal: NutritionGoal; carbohydrates: number; protein: number; fat: number; calories: number; entries: NutritionEntry[]; }
+export interface WaterIntakeEntry { id: string; date: string; time: string; quantityMl: number; note: string | null; }

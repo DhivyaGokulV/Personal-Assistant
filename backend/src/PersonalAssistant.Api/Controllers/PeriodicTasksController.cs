@@ -78,10 +78,25 @@ public class PeriodicTasksController : ControllerBase
     }
 
     [HttpDelete("periodic-tasks/{id:guid}")]
-    public async Task<IActionResult> DeleteTask(Guid id, CancellationToken ct)
+    public async Task<IActionResult> DeleteTask(Guid id, [FromBody] ConfirmDeletePeriodicTaskRequest req, CancellationToken ct)
     {
-        try { await _service.DeleteTaskAsync(id, ct); return NoContent(); }
+        try { await _service.DeleteTaskAsync(id, req, ct); return NoContent(); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPut("periodic-groups/reorder")]
+    public async Task<IActionResult> ReorderGroups([FromBody] IReadOnlyList<ReorderPeriodicGroupRequest> req, CancellationToken ct)
+    {
+        await _service.ReorderGroupsAsync(req, ct);
+        return NoContent();
+    }
+
+    [HttpPut("periodic-tasks/reorder")]
+    public async Task<IActionResult> ReorderTasks([FromBody] IReadOnlyList<ReorderPeriodicTaskRequest> req, CancellationToken ct)
+    {
+        await _service.ReorderTasksAsync(req, ct);
+        return NoContent();
     }
 
     [HttpPost("periodic-tasks/{id:guid}/history")]
@@ -117,14 +132,15 @@ public class PeriodicTasksController : ControllerBase
 
         var table = new ReportTable(
             $"Periodic-Tasks-{report.From:yyyyMMdd}-to-{report.To:yyyyMMdd}",
-            new[] { "Group", "Task", "Times Done", "Last Done On", "Next Due On" },
+            new[] { "Group", "Task", "Times Done", "Last Done On", "Next Due On", "Task History" },
             report.Rows.Select(r => (IReadOnlyList<string?>)new[]
             {
                 r.GroupName,
                 r.TaskTitle,
                 r.TimesDoneInRange.ToString(),
                 r.LastDoneOn?.ToString("yyyy-MM-dd"),
-                r.NextDueOn?.ToString("yyyy-MM-dd")
+                r.NextDueOn?.ToString("yyyy-MM-dd"),
+                r.TaskHistory
             }).ToList());
 
         var exported = _exporter.Export(table, format);

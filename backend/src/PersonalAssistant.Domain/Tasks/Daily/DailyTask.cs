@@ -11,6 +11,7 @@ public class DailyTask : EntityBase
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public TaskActiveStatus Status { get; set; } = TaskActiveStatus.Active;
+    public int DisplayOrder { get; set; }
 
     public ICollection<DailyTaskCompletion> Completions { get; set; } = new List<DailyTaskCompletion>();
 }

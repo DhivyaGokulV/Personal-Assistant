@@ -9,6 +9,7 @@ export class PasswordVaultApi {
   private readonly base = `${environment.apiBaseUrl}/password-vault`;
   status() { return this.http.get<VaultStatus>(`${this.base}/status`); }
   initialize(body: any) { return this.http.post<VaultStatus>(`${this.base}/initialize`, body); }
+  resetMasterPassword(body: any) { return this.http.post<VaultStatus>(`${this.base}/reset-master-password`, body); }
   groups() { return this.http.get<PasswordGroup[]>(`${this.base}/groups`); }
   createGroup(body: any) { return this.http.post<PasswordGroup>(`${this.base}/groups`, body); }
   updateGroup(id: string, body: any) { return this.http.put<PasswordGroup>(`${this.base}/groups/${id}`, body); }

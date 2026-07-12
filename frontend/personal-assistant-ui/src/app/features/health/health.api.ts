@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { FoodDefinition, MeasurementEntry, NutritionDay, NutritionEntry, NutritionGoal, PagedResult, ReportFormat, WorkoutDefinition, WorkoutEntry } from './health.models';
+import { FoodDefinition, MeasurementEntry, NutritionDay, NutritionEntry, NutritionGoal, PagedResult, ReportFormat, WaterIntakeEntry, WorkoutDefinition, WorkoutEntry } from './health.models';
 
 @Injectable({ providedIn: 'root' })
 export class HealthApi {
@@ -43,4 +43,10 @@ export class HealthApi {
   saveGoal(body: any) { return this.http.put<NutritionGoal>(`${this.base}/nutrition-goal`, body); }
   day(date: string) { return this.http.get<NutritionDay>(`${this.base}/nutrition/day`, { params: this.params({ date }) }); }
   downloadNutrition(from: string, to: string, format: ReportFormat): Observable<HttpResponse<Blob>> { return this.http.get(`${this.base}/nutrition/reports`, { params: this.params({ from, to, format }), responseType: 'blob', observe: 'response' }); }
+
+  water(opts: any) { return this.http.get<PagedResult<WaterIntakeEntry>>(`${this.base}/water`, { params: this.params(opts) }); }
+  createWater(body: any) { return this.http.post<WaterIntakeEntry>(`${this.base}/water`, body); }
+  updateWater(id: string, body: any) { return this.http.put<WaterIntakeEntry>(`${this.base}/water/${id}`, body); }
+  deleteWater(id: string) { return this.http.delete<void>(`${this.base}/water/${id}`); }
+  downloadWater(from: string, to: string, format: ReportFormat): Observable<HttpResponse<Blob>> { return this.http.get(`${this.base}/water/reports`, { params: this.params({ from, to, format }), responseType: 'blob', observe: 'response' }); }
 }

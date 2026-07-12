@@ -2,7 +2,7 @@ namespace PersonalAssistant.Domain.Enums;
 
 public enum TodoStatus
 {
-    Incomplete = 1,
+    JustStarted = 1,
     NotStartedYet = 2,
     InProgress = 3,
     AlmostCompleted = 4,

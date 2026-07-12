@@ -1,31 +1,39 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { FormsModule } from '@angular/forms';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { PasswordVaultApi } from './password-vault.api';
 import { EncryptedField, PasswordEntry, PasswordGroup, VaultStatus } from './password-vault.models';
 
 const ITERATIONS = 310000;
+const RECOVERY_ITERATIONS = 210000;
 const VERIFIER = 'personal-assistant-vault-verifier';
-function today(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
+function today(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 @Component({
   selector: 'app-password-vault',
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
   template: `
-    <section class="container py-4">
+    <section class="container py-4 module-passwords">
       <a routerLink="/home" class="text-muted-soft small">Back home</a>
       <h1 class="page-title mt-2">Passwords</h1>
       <div class="security-note surface p-3 mb-3">
-        Credentials are encrypted in this browser before they are sent to the API. Losing the vault password means the saved secrets cannot be recovered.
+        Credentials are encrypted in this browser before they are sent to the API. The API never stores your master password; if you forget it, use your recovery PIN to set a new one.
       </div>
 
       @if (!status()?.isInitialized) {
-        <form class="surface p-3 vault-form" [formGroup]="unlockForm" (ngSubmit)="initialize()">
+        <form class="surface p-3 vault-form" [formGroup]="setupForm" (ngSubmit)="initialize()">
           <h2 class="section-title">Create vault</h2>
           <input type="password" class="form-control" placeholder="Master password" formControlName="password" />
+          @if (setupForm.controls.password.touched && setupForm.controls.password.invalid) { <div class="invalid-hint">Master password is required and must be at least 8 characters.</div> }
+          <input type="password" class="form-control" placeholder="Recovery PIN" formControlName="pin" />
+          @if (setupForm.controls.pin.touched && setupForm.controls.pin.invalid) { <div class="invalid-hint">Recovery PIN is required and must be at least 6 characters.</div> }
+          <input type="password" class="form-control" placeholder="Confirm recovery PIN" formControlName="confirmPin" />
           <button class="btn-neon">Create</button>
           @if (vaultError()) { <div class="alert alert-danger py-1 px-2 small mb-0">{{ vaultError() }}</div> }
         </form>
@@ -34,8 +42,19 @@ function today(): string { const d = new Date(); return `${d.getFullYear()}-${St
           <h2 class="section-title">Unlock vault</h2>
           <input type="password" class="form-control" placeholder="Master password" formControlName="password" />
           <button class="btn-neon">Unlock</button>
+          @if (canRecover()) { <button class="btn-link-soft text-start" type="button" (click)="toggleReset()">Forgot master password?</button> }
           @if (vaultError()) { <div class="alert alert-danger py-1 px-2 small mb-0">{{ vaultError() }}</div> }
         </form>
+        @if (showReset()) {
+          <form class="surface p-3 vault-form mt-3" [formGroup]="resetForm" (ngSubmit)="resetMasterPassword()">
+            <h2 class="section-title">Reset master password</h2>
+            <input type="password" class="form-control" placeholder="Recovery PIN" formControlName="pin" />
+            <input type="password" class="form-control" placeholder="New master password" formControlName="password" />
+            <input type="password" class="form-control" placeholder="Confirm new master password" formControlName="confirmPassword" />
+            <button class="btn-neon">Reset and unlock</button>
+            <div class="text-muted-soft small">Your old master password cannot be shown or recovered. The PIN only lets this browser re-wrap your vault key with a new master password.</div>
+          </form>
+        }
       } @else {
         <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
           <button class="btn-neon btn-sm" (click)="openGroup()">+ Group</button>
@@ -96,6 +115,7 @@ function today(): string { const d = new Date(); return `${d.getFullYear()}-${St
     .section-title { font-size: .95rem; font-weight: 600; }
     .vault-form { max-width: 420px; display: grid; gap: .75rem; }
     .btn-link-soft { background: transparent; border: 1px solid var(--border-strong); color: var(--fg-muted); padding: .3rem .7rem; border-radius: var(--radius-sm); }
+    .invalid-hint { color: var(--danger); font-size: .78rem; margin-top: -.45rem; }
     .form-row, .grid-form { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
     .grid-form > * { min-width: 160px; flex: 1; }
     .wide { width: 100%; }
@@ -113,6 +133,7 @@ function today(): string { const d = new Date(); return `${d.getFullYear()}-${St
 export class PasswordVaultComponent {
   private readonly api = inject(PasswordVaultApi);
   private readonly fb = inject(FormBuilder);
+
   readonly status = signal<VaultStatus | null>(null);
   readonly unlocked = signal(false);
   readonly groups = signal<PasswordGroup[]>([]);
@@ -124,42 +145,134 @@ export class PasswordVaultComponent {
   readonly entryError = signal<string | null>(null);
   readonly groupOpen = signal(false);
   readonly entryOpen = signal(false);
+  readonly showReset = signal(false);
+  readonly canRecover = computed(() => {
+    const s = this.status();
+    return !!(s?.recoverySalt && s.recoveryVerifierCipherText && s.recoveryVerifierIv && s.recoveryWrappedKeyCipherText && s.recoveryWrappedKeyIv && s.recoveryKdfIterations);
+  });
+
   key: CryptoKey | null = null;
   groupFilter = '';
   search = '';
   editingGroup: string | null = null;
   editingEntry: string | null = null;
   previousPassword = '';
+
   unlockForm = this.fb.group({ password: ['', Validators.required] });
+  setupForm = this.fb.group({
+    password: ['', [Validators.required, Validators.minLength(8)]],
+    pin: ['', [Validators.required, Validators.minLength(6)]],
+    confirmPin: ['', Validators.required]
+  });
+  resetForm = this.fb.group({
+    pin: ['', [Validators.required, Validators.minLength(6)]],
+    password: ['', [Validators.required, Validators.minLength(8)]],
+    confirmPassword: ['', Validators.required]
+  });
   groupForm = this.fb.group({ name: ['', Validators.required], description: [''] });
   entryForm = this.fb.group({ groupId: ['', Validators.required], name: ['', Validators.required], username: [''], email: [''], password: [''], createdDate: [today(), Validators.required], updatedDate: [''] });
+
   constructor() { this.loadStatus(); }
+
   async loadStatus() { this.status.set(await firstValueFrom(this.api.status())); }
+
   async initialize() {
     this.vaultError.set(null);
     try {
-      const password = this.unlockForm.value.password ?? '';
-      if (password.length < 8) { this.vaultError.set('Use at least 8 characters.'); return; }
+      this.setupForm.markAllAsTouched();
+      if (this.setupForm.invalid) { this.vaultError.set('Complete the required fields before creating the vault.'); return; }
+      const password = this.setupForm.value.password ?? '';
+      const pin = this.setupForm.value.pin ?? '';
+      if (pin !== this.setupForm.value.confirmPin) { this.vaultError.set('Recovery PIN confirmation does not match.'); return; }
+
       const salt = randomBase64(16);
-      this.key = await deriveKey(password, salt, ITERATIONS);
+      const recoverySalt = randomBase64(16);
+      this.key = await generateVaultKey();
+      const masterKey = await deriveKey(password, salt, ITERATIONS);
+      const recoveryKey = await deriveKey(pin, recoverySalt, RECOVERY_ITERATIONS);
       const verifier = await encryptText(this.key, VERIFIER);
-      this.status.set(await firstValueFrom(this.api.initialize({ salt, verifierCipherText: verifier.cipherText, verifierIv: verifier.iv, kdfIterations: ITERATIONS })));
+      const masterWrapped = await wrapVaultKey(this.key, masterKey);
+      const recoveryWrapped = await wrapVaultKey(this.key, recoveryKey);
+      const recoveryVerifier = await encryptText(recoveryKey, VERIFIER);
+
+      this.status.set(await firstValueFrom(this.api.initialize({
+        salt,
+        verifierCipherText: verifier.cipherText,
+        verifierIv: verifier.iv,
+        kdfIterations: ITERATIONS,
+        masterWrappedKeyCipherText: masterWrapped.cipherText,
+        masterWrappedKeyIv: masterWrapped.iv,
+        recoverySalt,
+        recoveryVerifierCipherText: recoveryVerifier.cipherText,
+        recoveryVerifierIv: recoveryVerifier.iv,
+        recoveryWrappedKeyCipherText: recoveryWrapped.cipherText,
+        recoveryWrappedKeyIv: recoveryWrapped.iv,
+        recoveryKdfIterations: RECOVERY_ITERATIONS
+      })));
       this.unlocked.set(true);
       await this.loadVault();
-    } catch (e: any) { this.vaultError.set(e?.error?.message ?? 'Vault setup failed.'); }
+    } catch (e: any) {
+      this.vaultError.set(e?.error?.message ?? 'Vault setup failed.');
+    }
   }
+
   async unlock() {
     this.vaultError.set(null);
     try {
       const s = this.status()!;
-      this.key = await deriveKey(this.unlockForm.value.password ?? '', s.salt!, s.kdfIterations!);
+      const masterKey = await deriveKey(this.unlockForm.value.password ?? '', s.salt!, s.kdfIterations!);
+      this.key = s.masterWrappedKeyCipherText && s.masterWrappedKeyIv
+        ? await unwrapVaultKey({ cipherText: s.masterWrappedKeyCipherText, iv: s.masterWrappedKeyIv }, masterKey)
+        : masterKey;
       const value = await decryptText(this.key, { cipherText: s.verifierCipherText!, iv: s.verifierIv! });
       if (value !== VERIFIER) throw new Error('Bad password');
       this.unlocked.set(true);
       await this.loadVault();
-    } catch { this.vaultError.set('Master password is incorrect.'); }
+    } catch {
+      this.vaultError.set('Master password is incorrect.');
+    }
   }
-  lock() { this.key = null; this.unlocked.set(false); this.decryptedEntries.set([]); this.unlockForm.reset(); }
+
+  async resetMasterPassword() {
+    this.vaultError.set(null);
+    try {
+      this.resetForm.markAllAsTouched();
+      if (!this.canRecover()) { this.vaultError.set('Recovery PIN is not configured for this vault.'); return; }
+      if (this.resetForm.invalid) { this.vaultError.set('Recovery PIN and new master password are required.'); return; }
+      if (this.resetForm.value.password !== this.resetForm.value.confirmPassword) { this.vaultError.set('New master password confirmation does not match.'); return; }
+
+      const s = this.status()!;
+      const recoveryKey = await deriveKey(this.resetForm.value.pin ?? '', s.recoverySalt!, s.recoveryKdfIterations!);
+      const recoveryVerifier = await decryptText(recoveryKey, { cipherText: s.recoveryVerifierCipherText!, iv: s.recoveryVerifierIv! });
+      if (recoveryVerifier !== VERIFIER) throw new Error('Bad PIN');
+      this.key = await unwrapVaultKey({ cipherText: s.recoveryWrappedKeyCipherText!, iv: s.recoveryWrappedKeyIv! }, recoveryKey);
+
+      const salt = randomBase64(16);
+      const masterKey = await deriveKey(this.resetForm.value.password ?? '', salt, ITERATIONS);
+      const verifier = await encryptText(this.key, VERIFIER);
+      const masterWrapped = await wrapVaultKey(this.key, masterKey);
+      this.status.set(await firstValueFrom(this.api.resetMasterPassword({
+        salt,
+        verifierCipherText: verifier.cipherText,
+        verifierIv: verifier.iv,
+        kdfIterations: ITERATIONS,
+        masterWrappedKeyCipherText: masterWrapped.cipherText,
+        masterWrappedKeyIv: masterWrapped.iv
+      })));
+
+      this.unlocked.set(true);
+      this.showReset.set(false);
+      this.resetForm.reset();
+      this.unlockForm.reset();
+      await this.loadVault();
+    } catch {
+      this.key = null;
+      this.vaultError.set('Recovery PIN is incorrect or the vault recovery data is unavailable.');
+    }
+  }
+
+  toggleReset() { this.vaultError.set(null); this.showReset.update(v => !v); }
+  lock() { this.key = null; this.unlocked.set(false); this.decryptedEntries.set([]); this.unlockForm.reset(); this.resetForm.reset(); }
   async loadVault() { const [groups] = await Promise.all([this.loadGroups(), this.loadEntries()]); return groups; }
   async loadGroups() { this.groups.set(await firstValueFrom(this.api.groups())); }
   async loadEntries() {
@@ -177,7 +290,13 @@ export class PasswordVaultComponent {
   async decryptField(f: EncryptedField | null): Promise<string> { return f && this.key ? decryptText(this.key, f) : ''; }
   openGroup() { this.editingGroup = null; this.groupError.set(null); this.groupForm.reset({ name: '', description: '' }); this.groupOpen.set(true); }
   editGroup(g: PasswordGroup) { this.editingGroup = g.id; this.groupForm.patchValue(g as any); this.groupOpen.set(true); }
-  async saveGroup() { const body = this.groupForm.getRawValue(); if (!body.name?.trim()) { this.groupError.set('Group name is required.'); return; } this.editingGroup ? await firstValueFrom(this.api.updateGroup(this.editingGroup, body)) : await firstValueFrom(this.api.createGroup(body)); this.groupOpen.set(false); await this.loadGroups(); }
+  async saveGroup() {
+    const body = this.groupForm.getRawValue();
+    if (!body.name?.trim()) { this.groupError.set('Group name is required.'); return; }
+    this.editingGroup ? await firstValueFrom(this.api.updateGroup(this.editingGroup, body)) : await firstValueFrom(this.api.createGroup(body));
+    this.groupOpen.set(false);
+    await this.loadGroups();
+  }
   async deleteGroup(g: PasswordGroup) { if (confirm(`Delete group ${g.name} and its entries?`)) { await firstValueFrom(this.api.deleteGroup(g.id)); await this.loadVault(); } }
   openEntry() { this.editingEntry = null; this.previousPassword = ''; this.entryError.set(null); this.entryForm.reset({ groupId: this.groups()[0]?.id ?? '', createdDate: today(), updatedDate: '' }); this.entryOpen.set(true); }
   editEntry(raw: PasswordEntry, plain: any) { this.editingEntry = raw.id; this.previousPassword = plain.password; this.entryForm.reset({ groupId: raw.groupId, name: raw.name, username: plain.username, email: plain.email, password: plain.password, createdDate: raw.createdDate, updatedDate: raw.updatedDate ?? today() }); this.entryOpen.set(true); }
@@ -199,14 +318,21 @@ export class PasswordVaultComponent {
       if (this.previousPassword && this.previousPassword !== (f.password ?? '')) {
         await firstValueFrom(this.api.addHistory(saved.id, { changeDate: today(), previousPassword: await encryptText(this.key, this.previousPassword) }));
       }
-    } else saved = await firstValueFrom(this.api.createEntry(body));
+    } else {
+      saved = await firstValueFrom(this.api.createEntry(body));
+    }
     this.entryOpen.set(false);
-    await this.loadEntries(); await this.loadGroups();
+    await this.loadEntries();
+    await this.loadGroups();
   }
   async deleteEntry(e: PasswordEntry) { if (confirm(`Delete ${e.name}?`)) { await firstValueFrom(this.api.deleteEntry(e.id)); await this.loadEntries(); await this.loadGroups(); } }
   toggleReveal(id: string) { this.revealed.update(v => ({ ...v, [id]: !v[id] })); }
-  masked(value: string): string { return value ? '••••••••' : '-'; }
+  masked(value: string): string { return value ? '********' : '-'; }
   copy(value: string) { if (value) navigator.clipboard?.writeText(value); }
+}
+
+async function generateVaultKey(): Promise<CryptoKey> {
+  return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
 }
 
 async function deriveKey(password: string, saltBase64: string, iterations: number): Promise<CryptoKey> {
@@ -214,15 +340,37 @@ async function deriveKey(password: string, saltBase64: string, iterations: numbe
   const material = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: fromBase64(saltBase64), iterations, hash: 'SHA-256' }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
+
+async function wrapVaultKey(vaultKey: CryptoKey, wrappingKey: CryptoKey): Promise<EncryptedField> {
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', vaultKey));
+  return encryptBytes(wrappingKey, raw);
+}
+
+async function unwrapVaultKey(field: EncryptedField, wrappingKey: CryptoKey): Promise<CryptoKey> {
+  const raw = await decryptBytes(wrappingKey, field);
+  return crypto.subtle.importKey('raw', raw, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+}
+
 async function encryptText(key: CryptoKey, value: string): Promise<EncryptedField> {
+  return encryptBytes(key, new TextEncoder().encode(value));
+}
+
+async function encryptBytes(key: CryptoKey, value: Uint8Array): Promise<EncryptedField> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(value));
+  const bytes = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes);
   return { cipherText: toBase64(new Uint8Array(data)), iv: toBase64(iv) };
 }
+
 async function decryptText(key: CryptoKey, field: EncryptedField): Promise<string> {
-  const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(field.iv) }, key, fromBase64(field.cipherText));
+  const data = await decryptBytes(key, field);
   return new TextDecoder().decode(data);
 }
+
+async function decryptBytes(key: CryptoKey, field: EncryptedField): Promise<ArrayBuffer> {
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromBase64(field.iv) }, key, fromBase64(field.cipherText));
+}
+
 function randomBase64(bytes: number): string { return toBase64(crypto.getRandomValues(new Uint8Array(bytes))); }
 function toBase64(bytes: Uint8Array): string { return btoa(String.fromCharCode(...bytes)); }
 function fromBase64(value: string): ArrayBuffer {

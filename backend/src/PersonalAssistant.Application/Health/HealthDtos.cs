@@ -48,6 +48,10 @@ public record NutritionGoalRequest(decimal? Carbohydrates, decimal? Protein, dec
 
 public record NutritionDayView(DateOnly Date, NutritionGoalDto Goal, decimal Carbohydrates, decimal Protein, decimal Fat, decimal Calories, IReadOnlyList<NutritionEntryDto> Entries);
 
+public record WaterIntakeDto(Guid Id, DateOnly Date, TimeOnly Time, decimal QuantityMl, string? Note);
+public record WaterIntakeRequest(DateOnly Date, TimeOnly Time, decimal QuantityMl, string? Note);
+public record WaterReport(DateOnly From, DateOnly To, decimal TotalMl, IReadOnlyList<WaterIntakeDto> Rows);
+
 public record WorkoutReportRow(string WorkoutName, WorkoutType Type, int TimesDone, DateOnly? LastDoneOn, decimal TotalVolume, decimal? MaxWeight, int TotalReps, int? TotalMinutes, decimal? TotalDistance);
 public record MeasurementReport(DateOnly From, DateOnly To, IReadOnlyList<MeasurementEntryDto> Rows);
 public record WorkoutReport(DateOnly From, DateOnly To, IReadOnlyList<WorkoutReportRow> Rows);
@@ -85,4 +89,10 @@ public interface IHealthService
     Task<NutritionGoalDto> SaveNutritionGoalAsync(NutritionGoalRequest req, CancellationToken ct);
     Task<NutritionDayView> GetNutritionDayAsync(DateOnly date, CancellationToken ct);
     Task<NutritionReport> GetNutritionReportAsync(DateOnly from, DateOnly to, CancellationToken ct);
+
+    Task<HealthPagedResult<WaterIntakeDto>> ListWaterAsync(DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct);
+    Task<WaterIntakeDto> CreateWaterAsync(WaterIntakeRequest req, CancellationToken ct);
+    Task<WaterIntakeDto> UpdateWaterAsync(Guid id, WaterIntakeRequest req, CancellationToken ct);
+    Task DeleteWaterAsync(Guid id, CancellationToken ct);
+    Task<WaterReport> GetWaterReportAsync(DateOnly from, DateOnly to, CancellationToken ct);
 }

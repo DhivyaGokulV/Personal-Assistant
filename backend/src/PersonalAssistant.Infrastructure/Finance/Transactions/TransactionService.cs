@@ -122,6 +122,12 @@ public class TransactionService : ITransactionService
         await ValidateOptionalRefsAsync(owner, req.CategoryId, req.PaymentTypeId, ct);
         var tagIds = await ValidateTagIdsAsync(owner, req.TagIds, ct);
 
+        if (entity.TransferGroupId.HasValue)
+        {
+            await UpdateSelfTransferPairAsync(entity, req, tagIds, ct);
+            return await GetAsync(id, ct);
+        }
+
         entity.Date = req.Date;
         entity.Type = req.Type;
         entity.AccountId = req.AccountId;
@@ -138,6 +144,47 @@ public class TransactionService : ITransactionService
 
         await _db.SaveChangesAsync(ct);
         return await GetAsync(entity.Id, ct);
+    }
+
+    private async Task UpdateSelfTransferPairAsync(Transaction editedLeg, UpdateTransactionRequest req, IReadOnlyList<Guid> tagIds, CancellationToken ct)
+    {
+        var owner = OwnerId;
+        if (!editedLeg.TransferGroupId.HasValue) return;
+        var pair = await _db.Transactions
+            .Include(t => t.TransactionTags)
+            .Where(t => t.TransferGroupId == editedLeg.TransferGroupId && t.OwnerUserId == owner)
+            .ToListAsync(ct);
+        if (pair.Count != 2) throw new ArgumentException("Self-transfer pair is incomplete.");
+
+        var debit = pair.FirstOrDefault(t => t.Type == TransactionType.Debit) ?? pair[0];
+        var credit = pair.FirstOrDefault(t => t.Type == TransactionType.Credit) ?? pair[1];
+        if (editedLeg.Id == debit.Id)
+        {
+            if (req.AccountId == credit.AccountId) throw new ArgumentException("Source and destination must differ.");
+            debit.AccountId = req.AccountId;
+        }
+        else
+        {
+            if (req.AccountId == debit.AccountId) throw new ArgumentException("Source and destination must differ.");
+            credit.AccountId = req.AccountId;
+        }
+
+        foreach (var leg in pair)
+        {
+            leg.Date = req.Date;
+            leg.Amount = req.Amount;
+            leg.Reason = req.Reason.Trim();
+            leg.Note = req.Note?.Trim();
+            leg.PaymentTypeId = req.PaymentTypeId;
+            leg.CategoryId = null;
+            _db.TransactionTags.RemoveRange(leg.TransactionTags);
+            leg.TransactionTags.Clear();
+            foreach (var tagId in tagIds) leg.TransactionTags.Add(new TransactionTag { TransactionId = leg.Id, TagId = tagId });
+        }
+
+        debit.Type = TransactionType.Debit;
+        credit.Type = TransactionType.Credit;
+        await _db.SaveChangesAsync(ct);
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)

@@ -4,7 +4,7 @@ export type SortOrder = 'Asc' | 'Desc';
 export type ReportFormat = 'Json' | 'Csv' | 'Xlsx' | 'Pdf';
 
 export const TODO_STATUSES: { value: TodoStatus; label: string; tone: string }[] = [
-  { value: 1, label: 'Incomplete', tone: 'tone-amber' },
+  { value: 1, label: 'Just started', tone: 'tone-amber' },
   { value: 2, label: 'Not started yet', tone: 'tone-grey' },
   { value: 3, label: 'In progress', tone: 'tone-cyan' },
   { value: 4, label: 'Almost completed', tone: 'tone-violet' },
@@ -29,7 +29,7 @@ export interface Todo {
   daysLeft: number | null;
   status: TodoStatus;
   completedOn: string | null;
-  completionNote: string | null;
+  statusNote: string | null;
 }
 
 export interface TodoStatusCount {
@@ -49,11 +49,10 @@ export interface TodoReportRow {
   daysLeft: number | null;
   status: TodoStatus;
   completedOn: string | null;
-  completionNote: string | null;
+  statusNote: string | null;
 }
 
 export interface TodoReport {
-  from: string;
-  to: string;
+  asOf: string;
   rows: TodoReportRow[];
 }

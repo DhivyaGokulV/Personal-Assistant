@@ -1,9 +1,14 @@
 // ===== Enums =====
 export type AssetStatus = 1 | 2;        // 1 InPossession, 2 Sold
 export type InvestmentStatus = 1 | 2;   // 1 Active, 2 Inactive
-export type InvestmentTxType = 1 | 2;   // 1 Buy, 2 Sell
+export type InvestmentType = 1 | 2;     // 1 UnitBased, 2 AmountBased
+export type InvestmentTxType = 1 | 2 | 3 | 4; // Buy, Sell, Credit, Debit
+export type PreciousMetalTxType = 1 | 2; // Buy, Sell
 export type LiabilityStatus = 1 | 2;    // 1 Active, 2 Past
 export type LiabilityTxType = 1 | 2;    // 1 Acquisition, 2 Repayment
+export type LiabilityAccountCategory = 1 | 2 | 3; // Loan, Debt, CreditCard
+export type LiabilityAccountStatus = 1 | 2; // Active, Inactive
+export type LiabilityAccountTxType = 1 | 2; // Credit, Debit
 export type ReportFormat = 'Json' | 'Csv' | 'Xlsx' | 'Pdf';
 
 export const ASSET_STATUSES = [
@@ -64,56 +69,160 @@ export interface AssetWithHistory {
 }
 
 // ===== Investments =====
-export interface InvestmentGroup {
-  id: string;
-  name: string;
-  description: string | null;
-  tag: AssetTagBadge | null;
-  status: InvestmentStatus;
-  totalInvested: number;
-  totalCurrentValue: number;
-  profitLoss: number;
-}
-
 export interface Investment {
   id: string;
-  groupId: string;
-  groupName: string;
   name: string;
   description: string | null;
   tag: AssetTagBadge | null;
-  unit: string;
+  investmentType: InvestmentType;
+  currencyCode: string;
+  creationDate: string;
   status: InvestmentStatus;
+  units: number;
+  amountInvested: number;
   currentPrice: number | null;
-  lastPriceAsOf: string | null;
-  unitsHolding: number;
-  averageBuyPrice: number;
-  currentHoldingValue: number;
-  invested: number;
-  profitLoss: number;
+  currentValue: number;
+  remainingCostBasis: number;
+  profitLossPercent: number | null;
 }
 
 export interface InvestmentPriceEntry {
   id: string;
-  asOf: string;
-  price: number;
-  note: string | null;
+  date: string;
+  pricePerUnit: number;
 }
 
-export interface InvestmentTx {
+export interface InvestmentEntry {
   id: string;
   date: string;
   type: InvestmentTxType;
-  units: number;
-  price: number;
-  total: number;
   note: string | null;
+  quantity: number | null;
+  pricePerUnit: number | null;
+  amount: number;
+}
+
+export interface InvestmentStatusEntry {
+  id: string;
+  status: InvestmentStatus;
+  effectiveDate: string;
 }
 
 export interface InvestmentDetail {
   investment: Investment;
-  prices: InvestmentPriceEntry[];
-  transactions: InvestmentTx[];
+  statusHistory: InvestmentStatusEntry[];
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+export interface InvestmentStatistics {
+  metric: string;
+  currencyCode: string;
+  points: TimeSeriesPoint[];
+}
+
+// ===== Liability Accounts =====
+export interface LiabilityAccount {
+  id: string;
+  category: LiabilityAccountCategory;
+  name: string;
+  description: string | null;
+  creationDate: string;
+  status: LiabilityAccountStatus;
+  currencyCode: string;
+  standingAmount: number;
+  lastEntryDate: string | null;
+}
+
+export interface LiabilityAccountEntry {
+  id: string;
+  type: LiabilityAccountTxType;
+  date: string;
+  note: string | null;
+  amount: number;
+  runningBalance: number;
+}
+
+export interface LiabilityAccountStatusEntry {
+  id: string;
+  status: LiabilityAccountStatus;
+  effectiveDate: string;
+}
+
+export interface LiabilityAccountStatistics {
+  metric: string;
+  currencyCode: string;
+  points: TimeSeriesPoint[];
+}
+
+// ===== Precious Metals =====
+export interface PreciousMetal {
+  id: string;
+  name: string;
+  description: string | null;
+  creationDate: string;
+  currencyCode: string;
+  isDefault: boolean;
+  quantity: number;
+  currentPrice: number | null;
+  currentValue: number;
+}
+
+export interface PreciousMetalEntry {
+  id: string;
+  type: PreciousMetalTxType;
+  date: string;
+  note: string | null;
+  quantity: number;
+  pricePerUnit: number;
+  amount: number;
+}
+
+export interface PreciousMetalPriceEntry {
+  id: string;
+  date: string;
+  pricePerUnit: number;
+}
+
+export interface PreciousMetalStatistics {
+  metric: string;
+  currencyCode: string;
+  points: TimeSeriesPoint[];
+}
+
+// ===== Jewellery =====
+export interface JewelleryItem {
+  id: string;
+  name: string;
+  description: string | null;
+  buyingDate: string;
+  buyingPrice: number;
+  quantityInGrams: number;
+  status: AssetStatus;
+  sellingDate: string | null;
+  sellingPrice: number | null;
+  sellingNote: string | null;
+  currencyCode: string;
+}
+
+// ===== Personal Assets =====
+export interface PersonalAssetItem {
+  id: string;
+  name: string;
+  description: string | null;
+  buyingDate: string;
+  buyingPrice: number;
+  status: AssetStatus;
+  sellingDate: string | null;
+  sellingPrice: number | null;
+  sellingNote: string | null;
+  currencyCode: string;
 }
 
 // ===== Liabilities =====
@@ -168,7 +277,7 @@ export interface AssetTrackerDashboard {
 }
 
 // ===== Helpers =====
-export const CURRENCY = '$';
+export const CURRENCY = '₹';
 
 export function fmtMoney(n: number | null | undefined, fractionDigits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';

@@ -204,7 +204,27 @@ public class PasswordVaultSettingConfiguration : IEntityTypeConfiguration<Passwo
         b.Property(x => x.Salt).IsRequired().HasMaxLength(500);
         b.Property(x => x.VerifierCipherText).IsRequired().HasMaxLength(4000);
         b.Property(x => x.VerifierIv).IsRequired().HasMaxLength(500);
+        b.Property(x => x.MasterWrappedKeyCipherText).HasMaxLength(4000);
+        b.Property(x => x.MasterWrappedKeyIv).HasMaxLength(500);
+        b.Property(x => x.RecoverySalt).HasMaxLength(500);
+        b.Property(x => x.RecoveryVerifierCipherText).HasMaxLength(4000);
+        b.Property(x => x.RecoveryVerifierIv).HasMaxLength(500);
+        b.Property(x => x.RecoveryWrappedKeyCipherText).HasMaxLength(4000);
+        b.Property(x => x.RecoveryWrappedKeyIv).HasMaxLength(500);
         b.HasIndex(x => new { x.OwnerUserId, x.IsDeleted });
+        b.HasQueryFilter(x => !x.IsDeleted);
+    }
+}
+
+public class WaterIntakeEntryConfiguration : IEntityTypeConfiguration<WaterIntakeEntry>
+{
+    public void Configure(EntityTypeBuilder<WaterIntakeEntry> b)
+    {
+        b.ToTable("WaterIntakeEntries");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.QuantityMl).HasPrecision(12, 2);
+        b.Property(x => x.Note).HasMaxLength(2000);
+        b.HasIndex(x => new { x.OwnerUserId, x.Date, x.IsDeleted });
         b.HasQueryFilter(x => !x.IsDeleted);
     }
 }

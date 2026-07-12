@@ -43,7 +43,8 @@ public class TodosController : ControllerBase
     public async Task<ActionResult<TodoDto>> Create([FromBody] CreateTodoRequest req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.Title)) return BadRequest(new { message = "Title is required." });
-        return Ok(await _service.CreateAsync(req, ct));
+        try { return Ok(await _service.CreateAsync(req, ct)); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     [HttpPut("{id:guid}")]
@@ -63,17 +64,17 @@ public class TodosController : ControllerBase
 
     [HttpGet("reports")]
     public async Task<IActionResult> Report(
-        [FromQuery] DateOnly from,
-        [FromQuery] DateOnly to,
+        [FromQuery] DateOnly? asOf,
         [FromQuery] ReportFormat format = ReportFormat.Json,
         CancellationToken ct = default)
     {
-        var report = await _service.GetReportAsync(from, to, ct);
+        var date = asOf ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var report = await _service.GetReportAsync(date, ct);
         if (format == ReportFormat.Json) return Ok(report);
 
         var table = new ReportTable(
-            $"Todos-{report.From:yyyyMMdd}-to-{report.To:yyyyMMdd}",
-            new[] { "Title", "Added", "Deadline", "Days Left", "Status", "Completed On", "Completion Note" },
+            $"Todos-As-Of-{report.AsOf:yyyyMMdd}",
+            new[] { "Title", "Added", "Deadline", "Days", "Status", "Completed On", "Note" },
             report.Rows.Select(r => (IReadOnlyList<string?>)new[]
             {
                 r.Title,
@@ -82,7 +83,7 @@ public class TodosController : ControllerBase
                 r.DaysLeft?.ToString(),
                 r.Status.ToString(),
                 r.CompletedOn?.ToString("yyyy-MM-dd"),
-                r.CompletionNote
+                r.StatusNote
             }).ToList());
 
         var exported = _exporter.Export(table, format);

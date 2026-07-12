@@ -10,5 +10,5 @@ public interface ITodoService
     Task<TodoDto> UpdateAsync(Guid id, UpdateTodoRequest req, CancellationToken ct);
     Task DeleteAsync(Guid id, CancellationToken ct);
     Task<TodoSummary> GetSummaryAsync(CancellationToken ct);
-    Task<TodoReport> GetReportAsync(DateOnly from, DateOnly to, CancellationToken ct);
+    Task<TodoReport> GetReportAsync(DateOnly asOf, CancellationToken ct);
 }

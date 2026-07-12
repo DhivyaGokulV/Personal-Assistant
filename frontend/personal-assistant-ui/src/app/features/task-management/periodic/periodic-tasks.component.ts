@@ -103,7 +103,7 @@ function daysBetween(isoDate: string): number {
           No groups yet. Click <em>Add Group</em> to create one.
         </div>
       } @else {
-        @for (g of groups(); track g.id) {
+        @for (g of groups(); track g.id; let groupIndex = $index) {
           <article class="group-card neon mb-3">
             @if (editingGroup()?.id === g.id) {
               <div class="row g-2 align-items-end">
@@ -130,6 +130,8 @@ function daysBetween(isoDate: string): number {
                 </div>
                 <span class="count-pill ms-auto">{{ tasksInGroup(g.id).length }} task(s)</span>
                 <div class="group-actions">
+                  <button class="icon-btn" type="button" title="Move group up" [disabled]="groupIndex === 0 || saving()" (click)="moveGroup(groupIndex, -1)">Up</button>
+                  <button class="icon-btn" type="button" title="Move group down" [disabled]="groupIndex === groups().length - 1 || saving()" (click)="moveGroup(groupIndex, 1)">Dn</button>
                   <button class="icon-btn" type="button" title="Edit group" (click)="startEditGroup(g)">✎</button>
                   <button class="icon-btn icon-danger" type="button" title="Delete group" (click)="deleteGroup(g)">🗑</button>
                 </div>
@@ -137,7 +139,7 @@ function daysBetween(isoDate: string): number {
             }
 
             <ul class="task-list">
-              @for (t of tasksInGroup(g.id); track t.id) {
+              @for (t of tasksInGroup(g.id); track t.id; let taskIndex = $index) {
                 <li class="task-row">
                   @if (editingTask()?.id === t.id) {
                     <div class="task-edit-form">
@@ -215,11 +217,11 @@ function daysBetween(isoDate: string): number {
                           <div class="history-header">History</div>
                           @if (loadingHistoryFor() === t.id) {
                             <div class="text-muted-soft small">Loading history…</div>
-                          } @else if ((historyByTask()[t.id] ?? []).length === 0) {
+                          } @else if (historyFor(t.id).length === 0) {
                             <div class="text-muted-soft small">No history yet.</div>
                           } @else {
                             <ul class="history-list">
-                              @for (h of historyByTask()[t.id] ?? []; track h.id) {
+                              @for (h of historyFor(t.id); track h.id) {
                                 <li class="history-row">
                                   @if (editingHistory()?.id === h.id) {
                                     <div class="row g-2 align-items-end w-100">
@@ -258,6 +260,8 @@ function daysBetween(isoDate: string): number {
                       <button class="btn-link-soft btn-sm" type="button" (click)="toggleHistory(t)">
                         {{ expandedTaskId() === t.id ? 'Hide history' : 'History (' + t.historyCount + ')' }}
                       </button>
+                      <button class="icon-btn" type="button" title="Move task up" [disabled]="taskIndex === 0 || saving()" (click)="moveTask(g.id, taskIndex, -1)">Up</button>
+                      <button class="icon-btn" type="button" title="Move task down" [disabled]="taskIndex === tasksInGroup(g.id).length - 1 || saving()" (click)="moveTask(g.id, taskIndex, 1)">Dn</button>
                       <button class="icon-btn" type="button" title="Edit task" (click)="startEditTask(t)">✎</button>
                       <button class="icon-btn icon-danger" type="button" title="Delete task" (click)="deleteTask(t)">🗑</button>
                     </div>
@@ -373,7 +377,8 @@ function daysBetween(isoDate: string): number {
     .due-never { color: var(--fg-subtle); }
 
     .icon-btn {
-      width: 28px; height: 28px;
+      min-width: 28px; height: 28px;
+      padding: 0 0.35rem;
       border-radius: var(--radius-sm);
       background: transparent; border: 1px solid transparent;
       color: var(--fg-muted); cursor: pointer;
@@ -481,6 +486,10 @@ export class PeriodicTasksComponent {
 
   tasksInGroup(groupId: string): PeriodicTask[] {
     return this.tasks().filter(t => t.groupId === groupId);
+  }
+
+  historyFor(taskId: string): PeriodicHistory[] {
+    return this.historyByTask()[taskId] ?? [];
   }
 
   unitLabel(unit: FrequencyUnit): string {
@@ -609,11 +618,40 @@ export class PeriodicTasksComponent {
   }
 
   async deleteTask(t: PeriodicTask): Promise<void> {
-    if (!confirm(`Delete task "${t.title}" and all its history?`)) return;
+    const confirmationTitle = prompt(`Type "${t.title}" to delete this task and all its history.`);
+    if (confirmationTitle !== t.title) return;
     this.saving.set(true);
     try {
-      await firstValueFrom(this.api.deleteTask(t.id));
+      await firstValueFrom(this.api.deleteTask(t.id, confirmationTitle));
       this.cleanupTaskState(t.id);
+      await this.refresh();
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async moveGroup(index: number, direction: -1 | 1): Promise<void> {
+    const groups = [...this.groups()];
+    const target = index + direction;
+    if (target < 0 || target >= groups.length) return;
+    [groups[index], groups[target]] = [groups[target], groups[index]];
+    this.saving.set(true);
+    try {
+      await firstValueFrom(this.api.reorderGroups(groups.map((g, i) => ({ groupId: g.id, displayOrder: i + 1 }))));
+      await this.refresh();
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  async moveTask(groupId: string, index: number, direction: -1 | 1): Promise<void> {
+    const tasks = this.tasksInGroup(groupId);
+    const target = index + direction;
+    if (target < 0 || target >= tasks.length) return;
+    [tasks[index], tasks[target]] = [tasks[target], tasks[index]];
+    this.saving.set(true);
+    try {
+      await firstValueFrom(this.api.reorderTasks(tasks.map((t, i) => ({ taskId: t.id, groupId, displayOrder: i + 1 }))));
       await this.refresh();
     } finally {
       this.saving.set(false);

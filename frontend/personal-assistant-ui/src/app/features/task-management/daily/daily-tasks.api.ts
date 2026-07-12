@@ -37,6 +37,10 @@ export class DailyTasksApi {
     return this.http.delete<void>(`${this.base}/daily-groups/${id}`);
   }
 
+  reorderGroups(req: { groupId: string; displayOrder: number }[]): Observable<void> {
+    return this.http.put<void>(`${this.base}/daily-groups/reorder`, req);
+  }
+
   getTasks(opts: { groupId?: string; includeInactive?: boolean } = {}): Observable<DailyTask[]> {
     let params = new HttpParams();
     if (opts.groupId) params = params.set('groupId', opts.groupId);
@@ -52,8 +56,12 @@ export class DailyTasksApi {
     return this.http.put<DailyTask>(`${this.base}/daily-tasks/${id}`, req);
   }
 
-  deleteTask(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/daily-tasks/${id}`);
+  deleteTask(id: string, confirmationTitle: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/daily-tasks/${id}`, { body: { confirmationTitle } });
+  }
+
+  reorderTasks(req: { taskId: string; groupId: string; displayOrder: number }[]): Observable<void> {
+    return this.http.put<void>(`${this.base}/daily-tasks/reorder`, req);
   }
 
   getByDate(date: string): Observable<DailyByDateView> {
@@ -84,6 +92,14 @@ export class DailyTasksApi {
 
   downloadReport(kind: ReportKind, from: string, to: string, format: ReportFormat): Observable<HttpResponse<Blob>> {
     return this.http.get(`${this.base}/daily-tasks/reports/${kind}`, {
+      params: new HttpParams().set('from', from).set('to', to).set('format', format),
+      responseType: 'blob',
+      observe: 'response'
+    });
+  }
+
+  downloadConsolidatedReport(from: string, to: string, format: ReportFormat): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/daily-tasks/reports/consolidated`, {
       params: new HttpParams().set('from', from).set('to', to).set('format', format),
       responseType: 'blob',
       observe: 'response'

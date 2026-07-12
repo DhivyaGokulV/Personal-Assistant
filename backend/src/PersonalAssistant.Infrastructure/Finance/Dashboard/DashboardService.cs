@@ -33,6 +33,7 @@ public class DashboardService : IDashboardService
         // Pull all transactions once and aggregate in memory to keep this readable.
         var allTx = await _db.Transactions
             .Where(t => t.OwnerUserId == owner && t.Date <= to)
+            .Include(t => t.Account)
             .Include(t => t.Category)
             .Include(t => t.PaymentType)
             .Include(t => t.TransactionTags).ThenInclude(tt => tt.Tag)

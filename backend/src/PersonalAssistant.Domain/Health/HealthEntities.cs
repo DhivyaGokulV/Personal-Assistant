@@ -85,3 +85,11 @@ public class NutritionGoal : EntityBase
     public decimal? Fat { get; set; }
     public decimal? Calories { get; set; }
 }
+
+public class WaterIntakeEntry : EntityBase
+{
+    public DateOnly Date { get; set; }
+    public TimeOnly Time { get; set; }
+    public decimal QuantityMl { get; set; }
+    public string? Note { get; set; }
+}

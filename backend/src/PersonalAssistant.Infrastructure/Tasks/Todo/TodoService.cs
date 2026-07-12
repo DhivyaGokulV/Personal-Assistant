@@ -56,6 +56,9 @@ public class TodoService : ITodoService
 
     public async Task<TodoDto> CreateAsync(CreateTodoRequest req, CancellationToken ct)
     {
+        if (req.Status is TodoStatus.Completed or TodoStatus.Cancelled)
+            throw new ArgumentException("New tasks cannot be created as completed or cancelled.");
+
         var owner = OwnerId;
         var entity = new TodoItem
         {
@@ -85,12 +88,12 @@ public class TodoService : ITodoService
         if (req.Status == TodoStatus.Completed)
         {
             entity.CompletedOn = req.CompletedOn ?? entity.CompletedOn ?? DateOnly.FromDateTime(DateTime.UtcNow);
-            entity.CompletionNote = req.CompletionNote?.Trim();
+            entity.CompletionNote = req.StatusNote?.Trim();
         }
         else
         {
             entity.CompletedOn = req.CompletedOn;
-            entity.CompletionNote = req.CompletionNote?.Trim();
+            entity.CompletionNote = req.StatusNote?.Trim();
         }
 
         await _db.SaveChangesAsync(ct);
@@ -124,23 +127,21 @@ public class TodoService : ITodoService
         return new TodoSummary(total, by);
     }
 
-    public async Task<TodoReport> GetReportAsync(DateOnly from, DateOnly to, CancellationToken ct)
+    public async Task<TodoReport> GetReportAsync(DateOnly asOf, CancellationToken ct)
     {
-        if (to < from) (from, to) = (to, from);
         var owner = OwnerId;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var items = await _db.Todos
-            .Where(t => t.OwnerUserId == owner && t.AddedDate >= from && t.AddedDate <= to)
+            .Where(t => t.OwnerUserId == owner && t.AddedDate <= asOf)
             .OrderBy(t => t.Status).ThenBy(t => t.Deadline ?? DateOnly.MaxValue)
             .ToListAsync(ct);
 
         var rows = items.Select(t => new TodoReportRow(
             t.Title, t.AddedDate, t.Deadline,
-            ComputeDaysLeft(t.Deadline, today),
+            ComputeDaysLeft(t.Deadline, asOf),
             t.Status, t.CompletedOn, t.CompletionNote)).ToList();
 
-        return new TodoReport(from, to, rows);
+        return new TodoReport(asOf, rows);
     }
 
     private static TodoDto Map(TodoItem t, DateOnly today) => new(

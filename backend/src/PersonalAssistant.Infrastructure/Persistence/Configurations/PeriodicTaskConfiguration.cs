@@ -13,6 +13,7 @@ public class PeriodicTaskConfiguration : IEntityTypeConfiguration<PeriodicTask>
         b.Property(x => x.Title).IsRequired().HasMaxLength(300);
         b.Property(x => x.Description).HasMaxLength(2000);
         b.Property(x => x.Status).HasConversion<int>();
+        b.Property(x => x.DisplayOrder).HasDefaultValue(0);
         b.Property(x => x.FrequencyUnit).HasConversion<int>();
         b.HasIndex(x => new { x.OwnerUserId, x.GroupId, x.IsDeleted });
         b.HasQueryFilter(x => !x.IsDeleted);

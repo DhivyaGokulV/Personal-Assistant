@@ -1,82 +1,107 @@
-﻿using PersonalAssistant.Application.AssetTracker.Common;
+using PersonalAssistant.Application.AssetTracker.Common;
+using PersonalAssistant.Application.Common.Reports;
 using PersonalAssistant.Domain.Enums;
 
 namespace PersonalAssistant.Application.AssetTracker.Investments;
 
-public record InvestmentGroupDto(
-    Guid Id,
-    string Name,
-    string? Description,
-    AssetTagBadge? Tag,
-    InvestmentStatus Status,
-    decimal TotalInvested,
-    decimal TotalCurrentValue,
-    decimal ProfitLoss);
+public record InvestmentPage<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)
+{
+    public int TotalPages => TotalCount == 0 ? 0 : (int)Math.Ceiling(TotalCount / (double)PageSize);
+}
 
-public record CreateInvestmentGroupRequest(string Name, string? Description, Guid? TagId, InvestmentStatus Status);
-public record UpdateInvestmentGroupRequest(string Name, string? Description, Guid? TagId, InvestmentStatus Status);
+public enum InvestmentSort
+{
+    Name,
+    CreationDate,
+    CurrentValue,
+    ProfitLossPercent,
+    Status
+}
+
+public enum SortDirection { Asc, Desc }
+public enum StatisticsSource { Entries, Prices }
+public enum StatisticsDuration { OneMonth, ThreeMonths, SixMonths, OneYear, ThreeYears, FiveYears }
+
+public record InvestmentQuery(
+    string? Search,
+    InvestmentStatus? Status,
+    InvestmentType? Type,
+    Guid? TagId,
+    string? Currency,
+    InvestmentSort SortBy = InvestmentSort.Name,
+    SortDirection SortDirection = SortDirection.Asc,
+    int Page = 1,
+    int PageSize = 25);
 
 public record InvestmentDto(
     Guid Id,
-    Guid GroupId,
-    string GroupName,
     string Name,
     string? Description,
     AssetTagBadge? Tag,
-    string Unit,
+    InvestmentType InvestmentType,
+    string CurrencyCode,
+    DateOnly CreationDate,
     InvestmentStatus Status,
+    decimal Units,
+    decimal AmountInvested,
     decimal? CurrentPrice,
-    DateOnly? LastPriceAsOf,
-    decimal UnitsHolding,
-    decimal AverageBuyPrice,
-    decimal CurrentHoldingValue,
-    decimal Invested,
-    decimal ProfitLoss);
-
-public record InvestmentPriceHistoryDto(Guid Id, DateOnly AsOf, decimal Price, string? Note);
-
-public record InvestmentTxDto(Guid Id, DateOnly Date, InvestmentTxType Type, decimal Units, decimal Price, decimal Total, string? Note);
+    decimal CurrentValue,
+    decimal RemainingCostBasis,
+    decimal? ProfitLossPercent);
 
 public record InvestmentDetailDto(
     InvestmentDto Investment,
-    IReadOnlyList<InvestmentPriceHistoryDto> Prices,
-    IReadOnlyList<InvestmentTxDto> Transactions);
+    IReadOnlyList<InvestmentStatusDto> StatusHistory);
 
 public record CreateInvestmentRequest(
-    Guid GroupId,
     string Name,
     string? Description,
+    InvestmentType InvestmentType,
+    string CurrencyCode,
     Guid? TagId,
-    string Unit,
-    decimal CurrentPrice);
+    string? NewTagName,
+    DateOnly CreationDate);
 
-public record UpdateInvestmentRequest(
-    Guid GroupId,
-    string Name,
-    string? Description,
-    Guid? TagId,
-    string Unit);
+public record UpdateInvestmentRequest(string Name, string? Description, Guid? TagId);
 
-public record AddInvestmentPriceRequest(DateOnly AsOf, decimal Price, string? Note);
-public record UpdateInvestmentPriceRequest(DateOnly AsOf, decimal Price, string? Note);
+public record InvestmentStatusDto(Guid Id, InvestmentStatus Status, DateOnly EffectiveDate);
+public record ChangeInvestmentStatusRequest(InvestmentStatus Status, DateOnly EffectiveDate);
 
-/// <summary>
-/// Buy/Sell entry. If <see cref="Price"/> is null, the service will look up the closest
-/// entry in price history (on or before <see cref="Date"/>) and use that.
-/// </summary>
-public record AddInvestmentTxRequest(DateOnly Date, InvestmentTxType Type, decimal Units, decimal? Price, string? Note);
-public record UpdateInvestmentTxRequest(DateOnly Date, InvestmentTxType Type, decimal Units, decimal? Price, string? Note);
+public record InvestmentEntryDto(
+    Guid Id,
+    DateOnly Date,
+    InvestmentTxType Type,
+    string? Note,
+    decimal? Quantity,
+    decimal? PricePerUnit,
+    decimal Amount);
 
-public record InvestmentReportRow(
-    string GroupName,
-    string Name,
-    string Unit,
-    string? TagName,
-    string Status,
-    decimal UnitsHolding,
-    decimal CurrentPrice,
-    decimal CurrentValue,
-    decimal Invested,
-    decimal ProfitLoss);
+public record SaveInvestmentEntryRequest(
+    InvestmentTxType Type,
+    DateOnly Date,
+    string? Note,
+    decimal? PricePerUnit,
+    decimal? Quantity,
+    decimal? Amount);
 
-public record InvestmentReport(IReadOnlyList<InvestmentReportRow> Rows);
+public record InvestmentPriceHistoryDto(Guid Id, DateOnly Date, decimal PricePerUnit);
+public record SaveInvestmentPriceRequest(DateOnly Date, decimal PricePerUnit);
+
+public record StatisticsPoint(DateOnly Date, decimal Value);
+public record InvestmentStatisticsDto(string Metric, string CurrencyCode, IReadOnlyList<StatisticsPoint> Points);
+
+public record InvestmentExportRequest(
+    IReadOnlyList<Guid> InvestmentIds,
+    DateOnly From,
+    DateOnly To,
+    ReportFormat Format);
+
+public record InvestmentExportRow(
+    string Investment,
+    string RecordType,
+    DateOnly Date,
+    string Currency,
+    string Details,
+    decimal? Quantity,
+    decimal? UnitPrice,
+    decimal? Amount);

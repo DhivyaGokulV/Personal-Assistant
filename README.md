@@ -6,11 +6,11 @@ A self-hosted productivity app with authenticated modules for tasks, finance, as
 
 | Module | Status | What's inside |
 |---|---|---|
-| Task Management | Built | Daily Tasks, Periodic Tasks, To-Do List, reports |
-| Finance Management | Built | Dashboard, Expense Tracker, Budget, Settings |
+| Task Management | Built | Daily Tasks, Periodic Tasks, To-Do List, reports, task audit archive, typed-delete confirmation |
+| Finance Management | Built | Dashboard, Expense Tracker, multi-category Budget, Settings |
 | Asset Tracker | Built | Dashboard, Assets, Investments, Liabilities |
 | Time Tracker | Built | Calendar-style daily view, CRUD, filters, reports |
-| Health & Nutrition | Built | Measurements, workouts, nutrition, settings, reports |
+| Health & Nutrition | Built | Measurements, workouts, nutrition, water intake, settings, reports |
 | Goal Tracker | Built | Goal plans, goals, steps, reports |
 | Passwords | Built | Client-side encrypted password groups and entries |
 | Notes | Coming soon | Not included in this batch |
@@ -19,7 +19,7 @@ A self-hosted productivity app with authenticated modules for tasks, finance, as
 
 - Backend: .NET 10, ASP.NET Core Web API, C#, EF Core 10, ASP.NET Identity + JWT, Swagger, Serilog
 - Frontend: Angular 21 standalone components, TypeScript, Bootstrap 5, Reactive Forms for new modules, Observables for HTTP calls
-- Database: SQLite by default, SQL Server optional; each provider has its own migrations project
+- Database: SQLite for Development, SQL Server/Azure SQL for Production; each provider has its own migrations project
 - Reports: CSV, Excel, PDF, and JSON via the shared `IReportExportService`
 - Theme: responsive light/dark UI with neon border utilities
 
@@ -49,6 +49,20 @@ npm.cmd run start -- --port 4200 --host 127.0.0.1
 
 The API auto-applies migrations on startup.
 
+## Environment And Database
+
+Development uses `appsettings.Development.json` and keeps SQLite as the default local database.
+
+Production uses `appsettings.Production.json`, where the provider is SQL Server. Provide these values through environment variables or a secret store:
+
+- `Database__ConnectionStrings__SqlServer`
+- `Jwt__SigningKey`
+- `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, etc.
+
+Do not run Production against SQLite.
+
+`appsettings.Production.json` is intentionally ignored by git; use `backend/src/PersonalAssistant.Api/appsettings.Production.template.json` as the tracked starting point.
+
 ## Database Provider
 
 Edit `backend/src/PersonalAssistant.Api/appsettings.json`:
@@ -75,8 +89,8 @@ dotnet ef migrations add MyChange --project migrations/PersonalAssistant.Migrati
 
 - All non-auth API endpoints require JWT auth and service queries filter by `OwnerUserId`.
 - Domain entities use soft delete through the SaveChanges interceptor.
-- Password vault secrets are encrypted in the browser with Web Crypto AES-GCM using a separate master password and PBKDF2-derived key.
-- The API stores ciphertext, IVs, salt, and verifier metadata only. It cannot recover vault contents if the master password is lost.
+- Password vault secrets are encrypted in the browser with Web Crypto AES-GCM. New vault metadata supports a wrapped vault key so a configured recovery PIN can reset the master password without storing or displaying the master password.
+- The API stores ciphertext, IVs, salts, wrapped-key metadata, and verifier metadata only. If both the master password and recovery PIN are lost, vault contents cannot be recovered.
 - Do not put production JWT signing keys or password-vault master passwords in source control.
 
 ## Module Routes
@@ -89,6 +103,20 @@ dotnet ef migrations add MyChange --project migrations/PersonalAssistant.Migrati
 - `/goals`
 - `/passwords`
 
+## Recent Improvements
+
+- Dark-theme input placeholders are visible.
+- Module accent colors are available through CSS classes like `module-tasks`, `module-finance`, and `module-health`.
+- Daily and Periodic task groups/tasks now have display order fields, reorder APIs, and Up/Down controls in the UI.
+- Daily and Periodic task create/update/delete actions are written to `TaskArchiveEntries`; completion toggles are intentionally not archived.
+- Daily task reports include a consolidated report endpoint with per-date status columns and daily totals.
+- Periodic task reports include task history text.
+- To-Do status `Incomplete` is replaced by `Just started`; new tasks cannot start as `Completed` or `Cancelled`.
+- Finance dashboard account grouping now includes account navigation data, avoiding `(unknown)` account rows.
+- Self-transfer transaction updates now update the transfer pair.
+- Budget Planner supports multiple category allocations per budget, including per-category spend/remaining summaries and category-aware budget reports.
+- Health includes a Water tab with reports.
+
 ## Currency
 
 Finance and asset screens display money as Indian rupees using the shared frontend formatter in `finance.models.ts`.
@@ -97,7 +125,7 @@ Finance and asset screens display money as Indian rupees using the shared fronte
 
 ```powershell
 cd backend
-dotnet test
+dotnet test tests\PersonalAssistant.Tests\PersonalAssistant.Tests.csproj
 
 cd ..\frontend\personal-assistant-ui
 npm.cmd run build

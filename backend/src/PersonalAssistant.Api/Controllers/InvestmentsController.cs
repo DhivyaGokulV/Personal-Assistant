@@ -8,7 +8,7 @@ namespace PersonalAssistant.Api.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/asset-tracker")]
+[Route("api/asset-tracker/investments")]
 public class InvestmentsController : ControllerBase
 {
     private readonly IInvestmentService _service;
@@ -20,149 +20,138 @@ public class InvestmentsController : ControllerBase
         _exporter = exporter;
     }
 
-    // ===== Groups =====
-    [HttpGet("investment-groups")]
-    public async Task<ActionResult<IReadOnlyList<InvestmentGroupDto>>> GetGroups(
-        [FromQuery] InvestmentStatus? status, CancellationToken ct = default)
-        => Ok(await _service.GetGroupsAsync(status, ct));
+    [HttpGet]
+    public async Task<ActionResult<InvestmentPage<InvestmentDto>>> List(
+        [FromQuery] string? search, [FromQuery] InvestmentStatus? status, [FromQuery] InvestmentType? type,
+        [FromQuery] Guid? tagId, [FromQuery] string? currency,
+        [FromQuery] InvestmentSort sortBy = InvestmentSort.Name,
+        [FromQuery] SortDirection sortDirection = SortDirection.Asc,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken ct = default)
+        => Ok(await _service.ListAsync(new InvestmentQuery(search, status, type, tagId, currency, sortBy, sortDirection, page, pageSize), ct));
 
-    [HttpPost("investment-groups")]
-    public async Task<ActionResult<InvestmentGroupDto>> CreateGroup([FromBody] CreateInvestmentGroupRequest req, CancellationToken ct)
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<InvestmentDetailDto>> Get(Guid id, CancellationToken ct) =>
+        await Execute(() => _service.GetAsync(id, ct));
+
+    [HttpPost]
+    public async Task<ActionResult<InvestmentDto>> Create(CreateInvestmentRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { message = "Name is required." });
-        try { return Ok(await _service.CreateGroupAsync(req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        try
+        {
+            var result = await _service.CreateAsync(request, ct);
+            return CreatedAtAction(nameof(Get), new { id = result.Id }, result);
+        }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException or InvalidOperationException)
+        {
+            return Error<InvestmentDto>(ex);
+        }
     }
 
-    [HttpPut("investment-groups/{id:guid}")]
-    public async Task<ActionResult<InvestmentGroupDto>> UpdateGroup(Guid id, [FromBody] UpdateInvestmentGroupRequest req, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { message = "Name is required." });
-        try { return Ok(await _service.UpdateGroupAsync(id, req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-    }
+    [HttpPatch("{id:guid}")]
+    public async Task<ActionResult<InvestmentDto>> Update(Guid id, UpdateInvestmentRequest request, CancellationToken ct) =>
+        await Execute(() => _service.UpdateAsync(id, request, ct));
 
-    [HttpDelete("investment-groups/{id:guid}")]
-    public async Task<IActionResult> DeleteGroup(Guid id, CancellationToken ct)
-    {
-        try { await _service.DeleteGroupAsync(id, ct); return NoContent(); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-    }
-
-    // ===== Investments =====
-    [HttpGet("investments")]
-    public async Task<ActionResult<IReadOnlyList<InvestmentDto>>> List(
-        [FromQuery] InvestmentStatus? status,
-        [FromQuery] Guid? tagId,
-        [FromQuery] Guid? groupId,
-        CancellationToken ct = default)
-        => Ok(await _service.ListAsync(status, tagId, groupId, ct));
-
-    [HttpGet("investments/{id:guid}")]
-    public async Task<ActionResult<InvestmentDetailDto>> Get(Guid id, CancellationToken ct)
-    {
-        try { return Ok(await _service.GetAsync(id, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-    }
-
-    [HttpPost("investments")]
-    public async Task<ActionResult<InvestmentDto>> Create([FromBody] CreateInvestmentRequest req, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { message = "Name is required." });
-        try { return Ok(await _service.CreateAsync(req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-    }
-
-    [HttpPut("investments/{id:guid}")]
-    public async Task<ActionResult<InvestmentDto>> Update(Guid id, [FromBody] UpdateInvestmentRequest req, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { message = "Name is required." });
-        try { return Ok(await _service.UpdateAsync(id, req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-    }
-
-    [HttpDelete("investments/{id:guid}")]
+    [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         try { await _service.DeleteAsync(id, ct); return NoContent(); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException or InvalidOperationException) { return Error(ex); }
     }
 
-    // ===== Price history =====
-    [HttpPost("investments/{id:guid}/price-history")]
-    public async Task<ActionResult<InvestmentPriceHistoryDto>> AddPrice(Guid id, [FromBody] AddInvestmentPriceRequest req, CancellationToken ct)
+    [HttpGet("{id:guid}/status-history")]
+    public async Task<ActionResult<IReadOnlyList<InvestmentStatusDto>>> StatusHistory(Guid id, CancellationToken ct) =>
+        await Execute(() => _service.GetStatusHistoryAsync(id, ct));
+
+    [HttpPost("{id:guid}/status-history")]
+    public async Task<ActionResult<InvestmentStatusDto>> ChangeStatus(Guid id, ChangeInvestmentStatusRequest request, CancellationToken ct) =>
+        await Execute(() => _service.ChangeStatusAsync(id, request, ct));
+
+    [HttpGet("{id:guid}/entries")]
+    public async Task<ActionResult<InvestmentPage<InvestmentEntryDto>>> Entries(
+        Guid id, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default) =>
+        await Execute(() => _service.GetEntriesAsync(id, from, to, page, pageSize, ct));
+
+    [HttpPost("{id:guid}/entries")]
+    public async Task<ActionResult<InvestmentEntryDto>> AddEntry(Guid id, SaveInvestmentEntryRequest request, CancellationToken ct) =>
+        await Execute(() => _service.AddEntryAsync(id, request, ct));
+
+    [HttpPatch("{id:guid}/entries/{entryId:guid}")]
+    public async Task<ActionResult<InvestmentEntryDto>> UpdateEntry(Guid id, Guid entryId, SaveInvestmentEntryRequest request, CancellationToken ct) =>
+        await Execute(() => _service.UpdateEntryAsync(id, entryId, request, ct));
+
+    [HttpDelete("{id:guid}/entries/{entryId:guid}")]
+    public async Task<IActionResult> DeleteEntry(Guid id, Guid entryId, CancellationToken ct)
     {
-        try { return Ok(await _service.AddPriceAsync(id, req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        try { await _service.DeleteEntryAsync(id, entryId, ct); return NoContent(); }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException or InvalidOperationException) { return Error(ex); }
     }
 
-    [HttpPut("investments/{id:guid}/price-history/{priceId:guid}")]
-    public async Task<ActionResult<InvestmentPriceHistoryDto>> UpdatePrice(Guid id, Guid priceId, [FromBody] UpdateInvestmentPriceRequest req, CancellationToken ct)
-    {
-        try { return Ok(await _service.UpdatePriceAsync(id, priceId, req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
-    }
+    [HttpGet("{id:guid}/price-history")]
+    public async Task<ActionResult<InvestmentPage<InvestmentPriceHistoryDto>>> Prices(
+        Guid id, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default) =>
+        await Execute(() => _service.GetPricesAsync(id, from, to, page, pageSize, ct));
 
-    [HttpDelete("investments/{id:guid}/price-history/{priceId:guid}")]
+    [HttpPost("{id:guid}/price-history")]
+    public async Task<ActionResult<InvestmentPriceHistoryDto>> AddPrice(Guid id, SaveInvestmentPriceRequest request, CancellationToken ct) =>
+        await Execute(() => _service.AddPriceAsync(id, request, ct));
+
+    [HttpPatch("{id:guid}/price-history/{priceId:guid}")]
+    public async Task<ActionResult<InvestmentPriceHistoryDto>> UpdatePrice(Guid id, Guid priceId, SaveInvestmentPriceRequest request, CancellationToken ct) =>
+        await Execute(() => _service.UpdatePriceAsync(id, priceId, request, ct));
+
+    [HttpDelete("{id:guid}/price-history/{priceId:guid}")]
     public async Task<IActionResult> DeletePrice(Guid id, Guid priceId, CancellationToken ct)
     {
         try { await _service.DeletePriceAsync(id, priceId, ct); return NoContent(); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException or InvalidOperationException) { return Error(ex); }
     }
 
-    // ===== Buy/sell transactions =====
-    [HttpPost("investments/{id:guid}/transactions")]
-    public async Task<ActionResult<InvestmentTxDto>> AddTx(Guid id, [FromBody] AddInvestmentTxRequest req, CancellationToken ct)
+    [HttpGet("{id:guid}/statistics")]
+    public async Task<ActionResult<InvestmentStatisticsDto>> Statistics(
+        Guid id, [FromQuery] StatisticsSource source, [FromQuery] StatisticsDuration duration, CancellationToken ct) =>
+        await Execute(() => _service.GetStatisticsAsync(id, source, duration, ct));
+
+    [HttpPost("exports")]
+    public async Task<IActionResult> Export(InvestmentExportRequest request, CancellationToken ct)
     {
-        try { return Ok(await _service.AddTxAsync(id, req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        try
+        {
+            if (request.Format is not (ReportFormat.Xlsx or ReportFormat.Pdf))
+                return BadRequest(new ProblemDetails { Title = "Invalid export format", Detail = "Use Xlsx or Pdf.", Status = 400 });
+            var rows = await _service.GetExportAsync(request, ct);
+            var table = new ReportTable(
+                $"Investments-{request.From:yyyyMMdd}-{request.To:yyyyMMdd}",
+                new[] { "Investment", "Record type", "Date", "Currency", "Details", "Quantity", "Unit price", "Amount" },
+                rows.Select(x => (IReadOnlyList<string?>)new[]
+                {
+                    x.Investment, x.RecordType, x.Date.ToString("yyyy-MM-dd"), x.Currency, x.Details,
+                    x.Quantity?.ToString("0.########"), x.UnitPrice?.ToString("0.####"), x.Amount?.ToString("0.####")
+                }).ToList());
+            var file = _exporter.Export(table, request.Format);
+            return File(file.Data, file.ContentType, file.FileName);
+        }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException or InvalidOperationException) { return Error(ex); }
     }
 
-    [HttpPut("investments/{id:guid}/transactions/{txId:guid}")]
-    public async Task<ActionResult<InvestmentTxDto>> UpdateTx(Guid id, Guid txId, [FromBody] UpdateInvestmentTxRequest req, CancellationToken ct)
+    private async Task<ActionResult<T>> Execute<T>(Func<Task<T>> action)
     {
-        try { return Ok(await _service.UpdateTxAsync(id, txId, req, ct)); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        try { return Ok(await action()); }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException or InvalidOperationException) { return Error<T>(ex); }
     }
 
-    [HttpDelete("investments/{id:guid}/transactions/{txId:guid}")]
-    public async Task<IActionResult> DeleteTx(Guid id, Guid txId, CancellationToken ct)
+    private ActionResult<T> Error<T>(Exception ex) => ex switch
     {
-        try { await _service.DeleteTxAsync(id, txId, ct); return NoContent(); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-    }
+        KeyNotFoundException => NotFound(new ProblemDetails { Title = "Not found", Detail = ex.Message, Status = 404 }),
+        InvalidOperationException => Conflict(new ProblemDetails { Title = "Conflict", Detail = ex.Message, Status = 409 }),
+        _ => BadRequest(new ProblemDetails { Title = "Validation failed", Detail = ex.Message, Status = 400 })
+    };
 
-    // ===== Report =====
-    [HttpGet("investments/reports")]
-    public async Task<IActionResult> Report(
-        [FromQuery] InvestmentStatus? status,
-        [FromQuery] ReportFormat format = ReportFormat.Json,
-        CancellationToken ct = default)
+    private IActionResult Error(Exception ex) => ex switch
     {
-        var report = await _service.GetReportAsync(status, ct);
-        if (format == ReportFormat.Json) return Ok(report);
-
-        var table = new ReportTable(
-            "Investments-Report",
-            new[] { "Group", "Name", "Unit", "Tag", "Status", "Holding", "Current Price", "Current Value", "Invested", "P/L" },
-            report.Rows.Select(r => (IReadOnlyList<string?>)new[]
-            {
-                r.GroupName, r.Name, r.Unit, r.TagName, r.Status,
-                r.UnitsHolding.ToString("0.####"),
-                r.CurrentPrice.ToString("0.00"),
-                r.CurrentValue.ToString("0.00"),
-                r.Invested.ToString("0.00"),
-                r.ProfitLoss.ToString("0.00")
-            }).ToList());
-
-        var exported = _exporter.Export(table, format);
-        return File(exported.Data, exported.ContentType, exported.FileName);
-    }
+        KeyNotFoundException => NotFound(new ProblemDetails { Title = "Not found", Detail = ex.Message, Status = 404 }),
+        InvalidOperationException => Conflict(new ProblemDetails { Title = "Conflict", Detail = ex.Message, Status = 409 }),
+        _ => BadRequest(new ProblemDetails { Title = "Validation failed", Detail = ex.Message, Status = 400 })
+    };
 }

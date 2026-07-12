@@ -159,6 +159,38 @@ public class HealthController : ControllerBase
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
+    [HttpGet("water")]
+    public async Task<ActionResult<HealthPagedResult<WaterIntakeDto>>> Water([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken ct = default)
+        => Ok(await _service.ListWaterAsync(from, to, page, pageSize, ct));
+
+    [HttpPost("water")]
+    public async Task<ActionResult<WaterIntakeDto>> CreateWater([FromBody] WaterIntakeRequest req, CancellationToken ct)
+        => await Execute(() => _service.CreateWaterAsync(req, ct));
+
+    [HttpPut("water/{id:guid}")]
+    public async Task<ActionResult<WaterIntakeDto>> UpdateWater(Guid id, [FromBody] WaterIntakeRequest req, CancellationToken ct)
+        => await Execute(() => _service.UpdateWaterAsync(id, req, ct));
+
+    [HttpDelete("water/{id:guid}")]
+    public async Task<IActionResult> DeleteWater(Guid id, CancellationToken ct)
+        => await DeleteExecute(() => _service.DeleteWaterAsync(id, ct));
+
+    [HttpGet("water/reports")]
+    public async Task<IActionResult> WaterReport([FromQuery] DateOnly from, [FromQuery] DateOnly to, [FromQuery] ReportFormat format = ReportFormat.Json, CancellationToken ct = default)
+    {
+        try
+        {
+            var report = await _service.GetWaterReportAsync(from, to, ct);
+            if (format == ReportFormat.Json) return Ok(report);
+            var table = new ReportTable($"Water-{from:yyyyMMdd}-to-{to:yyyyMMdd}",
+                new[] { "Date", "Time", "Quantity ml", "Note" },
+                report.Rows.Select(r => (IReadOnlyList<string?>)new[] { r.Date.ToString("yyyy-MM-dd"), r.Time.ToString("HH:mm"), S(r.QuantityMl), r.Note }).ToList());
+            var exported = _exporter.Export(table, format);
+            return File(exported.Data, exported.ContentType, exported.FileName);
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     private static string? S(decimal? value) => value?.ToString("0.##");
 
     private static async Task<ActionResult<T>> Execute<T>(Func<Task<T>> action)

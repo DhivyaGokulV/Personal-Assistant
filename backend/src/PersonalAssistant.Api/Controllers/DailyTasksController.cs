@@ -74,10 +74,25 @@ public class DailyTasksController : ControllerBase
     }
 
     [HttpDelete("daily-tasks/{id:guid}")]
-    public async Task<IActionResult> DeleteTask(Guid id, CancellationToken ct)
+    public async Task<IActionResult> DeleteTask(Guid id, [FromBody] ConfirmDeleteTaskRequest req, CancellationToken ct)
     {
-        try { await _service.DeleteTaskAsync(id, ct); return NoContent(); }
+        try { await _service.DeleteTaskAsync(id, req, ct); return NoContent(); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPut("daily-groups/reorder")]
+    public async Task<IActionResult> ReorderGroups([FromBody] IReadOnlyList<ReorderDailyGroupRequest> req, CancellationToken ct)
+    {
+        await _service.ReorderGroupsAsync(req, ct);
+        return NoContent();
+    }
+
+    [HttpPut("daily-tasks/reorder")]
+    public async Task<IActionResult> ReorderTasks([FromBody] IReadOnlyList<ReorderDailyTaskRequest> req, CancellationToken ct)
+    {
+        await _service.ReorderTasksAsync(req, ct);
+        return NoContent();
     }
 
     [HttpGet("daily-tasks/by-date")]
@@ -124,6 +139,34 @@ public class DailyTasksController : ControllerBase
         return File(exported.Data, exported.ContentType, exported.FileName);
     }
 
+    [HttpGet("daily-tasks/reports/consolidated")]
+    public async Task<IActionResult> ConsolidatedReport(
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        [FromQuery] ReportFormat format = ReportFormat.Json,
+        CancellationToken ct = default)
+    {
+        var report = await _service.GetConsolidatedReportAsync(from, to, ct);
+        if (format == ReportFormat.Json) return Ok(report);
+
+        var columns = new List<string> { "Task Group", "Task Name", "Number of days completed", "Number of days in period" };
+        columns.AddRange(report.Dates.Select(d => d.ToString("yyyy-MM-dd")));
+
+        var rows = report.Rows.Select(r =>
+        {
+            var values = new List<string?> { r.TaskGroup, r.TaskName, r.DaysCompleted.ToString(), r.DaysInPeriod.ToString() };
+            values.AddRange(report.Dates.Select(d => r.StatusByDate.TryGetValue(d, out var s) ? s : ""));
+            return (IReadOnlyList<string?>)values;
+        }).ToList();
+
+        rows.Add((IReadOnlyList<string?>)new[] { "TOTAL", "Tasks completed", "", "" }.Concat(report.Dates.Select(d => report.Totals.First(t => t.Date == d).TasksCompleted.ToString())).ToList());
+        rows.Add((IReadOnlyList<string?>)new[] { "TOTAL", "Tasks active", "", "" }.Concat(report.Dates.Select(d => report.Totals.First(t => t.Date == d).TasksActive.ToString())).ToList());
+
+        var table = new ReportTable($"Daily-Consolidated-{report.From:yyyyMMdd}-to-{report.To:yyyyMMdd}", columns, rows);
+        var exported = _exporter.Export(table, format);
+        return File(exported.Data, exported.ContentType, exported.FileName);
+    }
+
     [HttpGet("daily-tasks/reports/task-wise")]
     public async Task<IActionResult> TaskWiseReport(
         [FromQuery] DateOnly from,
@@ -148,4 +191,8 @@ public class DailyTasksController : ControllerBase
         var exported = _exporter.Export(table, format);
         return File(exported.Data, exported.ContentType, exported.FileName);
     }
+
+    [HttpGet("daily-tasks/archive")]
+    public async Task<ActionResult<IReadOnlyList<TaskArchiveDto>>> Archive(CancellationToken ct)
+        => Ok(await _service.GetArchiveAsync(ct));
 }

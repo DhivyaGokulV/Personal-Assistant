@@ -70,11 +70,12 @@ public class BudgetsController : ControllerBase
         var b = report.Budget;
         var table = new ReportTable(
             $"Budget-{Sanitize(b.Name)}-{b.From:yyyyMMdd}-to-{b.To:yyyyMMdd}",
-            new[] { "Date", "Reason", "Account", "Payment Type", "Amount" },
+            new[] { "Date", "Reason", "Category", "Account", "Payment Type", "Amount" },
             report.Transactions.Select(r => (IReadOnlyList<string?>)new[]
             {
                 r.Date.ToString("yyyy-MM-dd"),
                 r.Reason,
+                r.CategoryName,
                 r.AccountName,
                 r.PaymentTypeName,
                 r.Amount.ToString("0.00")

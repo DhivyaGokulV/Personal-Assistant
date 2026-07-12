@@ -116,11 +116,23 @@ export interface Budget {
   spent: number;
   remaining: number;
   percentUsed: number;
+  entries: BudgetEntry[] | null;
+}
+
+export interface BudgetEntry {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  amount: number;
+  spent: number;
+  remaining: number;
+  percentUsed: number;
 }
 
 export interface BudgetTransactionRow {
   date: string;
   reason: string;
+  categoryName: string;
   accountName: string;
   paymentTypeName: string | null;
   amount: number;
@@ -131,9 +143,9 @@ export interface BudgetReport {
   transactions: BudgetTransactionRow[];
 }
 
-export const CURRENCY = '₹';
+export const CURRENCY = '\u20b9';
 export function fmtMoney(n: number | null | undefined): string {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined) return '-';
   const sign = n < 0 ? '-' : '';
   const abs = Math.abs(n);
   return `${sign}${CURRENCY}${abs.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

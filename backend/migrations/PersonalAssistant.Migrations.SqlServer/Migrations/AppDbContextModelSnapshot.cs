@@ -312,12 +312,23 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateOnly>("CreationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("InvestmentType")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -352,7 +363,60 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
 
                     b.HasIndex("OwnerUserId", "GroupId", "Status", "IsDeleted");
 
+                    b.HasIndex("OwnerUserId", "InvestmentType", "CurrencyCode", "IsDeleted");
+
                     b.ToTable("Investments", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.InvestmentAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("InvestmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NewValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "InvestmentId", "CreatedAt");
+
+                    b.ToTable("InvestmentAuditEntries", (string)null);
                 });
 
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.InvestmentGroup", b =>
@@ -436,11 +500,50 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.ToTable("InvestmentPriceHistory", (string)null);
                 });
 
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.InvestmentStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("InvestmentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvestmentId", "EffectiveDate", "IsDeleted")
+                        .IsUnique();
+
+                    b.ToTable("InvestmentStatusHistory", (string)null);
+                });
+
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.InvestmentTransaction", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -480,6 +583,113 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.HasIndex("InvestmentId", "Date");
 
                     b.ToTable("InvestmentTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.JewelleryAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("JewelleryItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("NewValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "JewelleryItemId", "CreatedAt");
+
+                    b.ToTable("JewelleryAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.JewelleryItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("BuyingDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("BuyingPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityInGrams")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateOnly?>("SellingDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SellingNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("SellingPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Status", "BuyingDate", "IsDeleted");
+
+                    b.ToTable("JewelleryItems", (string)null);
                 });
 
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.Liability", b =>
@@ -524,6 +734,186 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.ToTable("Liabilities", (string)null);
                 });
 
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("CreationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Category", "Name", "IsDeleted");
+
+                    b.HasIndex("OwnerUserId", "Category", "Status", "IsDeleted");
+
+                    b.ToTable("LiabilityAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccountAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("NewValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "LiabilityAccountId", "CreatedAt");
+
+                    b.ToTable("LiabilityAccountAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccountEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiabilityAccountId", "Date");
+
+                    b.HasIndex("OwnerUserId", "LiabilityAccountId", "IsDeleted");
+
+                    b.ToTable("LiabilityAccountEntries", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccountStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LiabilityAccountId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiabilityAccountId", "EffectiveDate", "IsDeleted")
+                        .IsUnique();
+
+                    b.ToTable("LiabilityAccountStatusHistory", (string)null);
+                });
+
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -564,6 +954,287 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.HasIndex("LiabilityId", "Date");
 
                     b.ToTable("LiabilityHistory", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PersonalAssetAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NewValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PersonalAssetItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "PersonalAssetItemId", "CreatedAt");
+
+                    b.ToTable("PersonalAssetAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PersonalAssetItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("BuyingDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("BuyingPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("SellingDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("SellingNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("SellingPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Status", "BuyingDate", "IsDeleted");
+
+                    b.ToTable("PersonalAssetItems", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("CreationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Name", "IsDeleted");
+
+                    b.ToTable("PreciousMetals", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetalAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NewValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValuesJson")
+                        .HasMaxLength(12000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PreciousMetalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "PreciousMetalId", "CreatedAt");
+
+                    b.ToTable("PreciousMetalAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetalPriceHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly>("AsOf")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PreciousMetalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PricePerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreciousMetalId", "AsOf", "IsDeleted")
+                        .IsUnique();
+
+                    b.ToTable("PreciousMetalPriceHistory", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetalTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PreciousMetalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PricePerUnit")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreciousMetalId", "Date");
+
+                    b.ToTable("PreciousMetalTransactions", (string)null);
                 });
 
             modelBuilder.Entity("PersonalAssistant.Domain.Finance.Account", b =>
@@ -657,6 +1328,45 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.HasIndex("OwnerUserId", "From", "To");
 
                     b.ToTable("Budgets", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.Finance.BudgetEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("BudgetId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BudgetId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("OwnerUserId", "BudgetId", "CategoryId", "IsDeleted");
+
+                    b.ToTable("BudgetEntries", (string)null);
                 });
 
             modelBuilder.Entity("PersonalAssistant.Domain.Finance.Category", b =>
@@ -1229,6 +1939,45 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.ToTable("NutritionGoals", (string)null);
                 });
 
+            modelBuilder.Entity("PersonalAssistant.Domain.Health.WaterIntakeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityMl")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)");
+
+                    b.Property<TimeOnly>("Time")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Date", "IsDeleted");
+
+                    b.ToTable("WaterIntakeEntries", (string)null);
+                });
+
             modelBuilder.Entity("PersonalAssistant.Domain.Health.WorkoutDefinition", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1638,8 +2387,39 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Property<int>("KdfIterations")
                         .HasColumnType("int");
 
+                    b.Property<string>("MasterWrappedKeyCipherText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("MasterWrappedKeyIv")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<Guid>("OwnerUserId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("RecoveryKdfIterations")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecoverySalt")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RecoveryVerifierCipherText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("RecoveryVerifierIv")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RecoveryWrappedKeyCipherText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<string>("RecoveryWrappedKeyIv")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Salt")
                         .IsRequired()
@@ -1678,6 +2458,11 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<Guid>("GroupId")
                         .HasColumnType("uniqueidentifier");
@@ -1762,6 +2547,11 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
@@ -1795,6 +2585,11 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<int>("FrequencyUnit")
                         .HasColumnType("int");
@@ -1846,6 +2641,11 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
@@ -1903,6 +2703,60 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.HasIndex("PeriodicTaskId", "CompletedOn");
 
                     b.ToTable("PeriodicTaskHistory", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.Tasks.TaskArchiveEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ActionDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ActivityType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValue")
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Module", "ActionDate", "IsDeleted");
+
+                    b.ToTable("TaskArchiveEntries", (string)null);
                 });
 
             modelBuilder.Entity("PersonalAssistant.Domain.Tasks.Todo.TodoItem", b =>
@@ -2130,6 +2984,17 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Navigation("Investment");
                 });
 
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.InvestmentStatusHistory", b =>
+                {
+                    b.HasOne("PersonalAssistant.Domain.AssetTracker.Investment", "Investment")
+                        .WithMany("StatusHistory")
+                        .HasForeignKey("InvestmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Investment");
+                });
+
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.InvestmentTransaction", b =>
                 {
                     b.HasOne("PersonalAssistant.Domain.AssetTracker.Investment", "Investment")
@@ -2151,6 +3016,28 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Navigation("Tag");
                 });
 
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccountEntry", b =>
+                {
+                    b.HasOne("PersonalAssistant.Domain.AssetTracker.LiabilityAccount", "LiabilityAccount")
+                        .WithMany("Entries")
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LiabilityAccount");
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccountStatusHistory", b =>
+                {
+                    b.HasOne("PersonalAssistant.Domain.AssetTracker.LiabilityAccount", "LiabilityAccount")
+                        .WithMany("StatusHistory")
+                        .HasForeignKey("LiabilityAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LiabilityAccount");
+                });
+
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityHistory", b =>
                 {
                     b.HasOne("PersonalAssistant.Domain.AssetTracker.Liability", "Liability")
@@ -2162,6 +3049,28 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                     b.Navigation("Liability");
                 });
 
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetalPriceHistory", b =>
+                {
+                    b.HasOne("PersonalAssistant.Domain.AssetTracker.PreciousMetal", "PreciousMetal")
+                        .WithMany("PriceHistory")
+                        .HasForeignKey("PreciousMetalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PreciousMetal");
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetalTransaction", b =>
+                {
+                    b.HasOne("PersonalAssistant.Domain.AssetTracker.PreciousMetal", "PreciousMetal")
+                        .WithMany("Transactions")
+                        .HasForeignKey("PreciousMetalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PreciousMetal");
+                });
+
             modelBuilder.Entity("PersonalAssistant.Domain.Finance.Budget", b =>
                 {
                     b.HasOne("PersonalAssistant.Domain.Finance.Category", "Category")
@@ -2169,6 +3078,25 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.Finance.BudgetEntry", b =>
+                {
+                    b.HasOne("PersonalAssistant.Domain.Finance.Budget", "Budget")
+                        .WithMany("Entries")
+                        .HasForeignKey("BudgetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PersonalAssistant.Domain.Finance.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Budget");
 
                     b.Navigation("Category");
                 });
@@ -2330,6 +3258,8 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
                 {
                     b.Navigation("PriceHistory");
 
+                    b.Navigation("StatusHistory");
+
                     b.Navigation("Transactions");
                 });
 
@@ -2341,6 +3271,25 @@ namespace PersonalAssistant.Migrations.SqlServer.Migrations
             modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.Liability", b =>
                 {
                     b.Navigation("History");
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.LiabilityAccount", b =>
+                {
+                    b.Navigation("Entries");
+
+                    b.Navigation("StatusHistory");
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.AssetTracker.PreciousMetal", b =>
+                {
+                    b.Navigation("PriceHistory");
+
+                    b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("PersonalAssistant.Domain.Finance.Budget", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("PersonalAssistant.Domain.Finance.Transaction", b =>

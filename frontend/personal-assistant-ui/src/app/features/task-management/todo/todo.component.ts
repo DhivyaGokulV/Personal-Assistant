@@ -28,7 +28,7 @@ interface EditingForm {
   deadline: string;
   status: TodoStatus;
   completedOn: string;
-  completionNote: string;
+  statusNote: string;
 }
 
 function todayIso(): string {
@@ -82,7 +82,7 @@ function todayIso(): string {
             <div class="col-6 col-md-2">
               <label class="form-label small">Status</label>
               <select class="form-select form-select-sm" [(ngModel)]="newItem.status">
-                @for (s of statuses; track s.value) {
+                @for (s of createStatuses; track s.value) {
                   <option [ngValue]="s.value">{{ s.label }}</option>
                 }
               </select>
@@ -171,8 +171,8 @@ function todayIso(): string {
                             <input type="date" class="form-control form-control-sm" [(ngModel)]="editingItem()!.completedOn" />
                           </div>
                           <div class="col-12 col-md-9">
-                            <label class="form-label small">Completion note</label>
-                            <input class="form-control form-control-sm" [(ngModel)]="editingItem()!.completionNote" />
+                            <label class="form-label small">Status note</label>
+                            <input class="form-control form-control-sm" [(ngModel)]="editingItem()!.statusNote" />
                           </div>
                         }
                       </div>
@@ -197,8 +197,8 @@ function todayIso(): string {
                     <td>
                       @if (t.status === 5) {
                         <div class="small">{{ t.completedOn ?? '—' }}</div>
-                        @if (t.completionNote) {
-                          <div class="small text-muted-soft">{{ t.completionNote }}</div>
+                        @if (t.statusNote) {
+                          <div class="small text-muted-soft">{{ t.statusNote }}</div>
                         }
                       } @else {
                         <span class="text-subtle">—</span>
@@ -297,6 +297,7 @@ export class TodoListComponent {
   private readonly api = inject(TodoApi);
 
   readonly statuses = TODO_STATUSES;
+  readonly createStatuses = TODO_STATUSES.filter(s => s.value !== 5 && s.value !== 6);
 
   readonly items = signal<Todo[]>([]);
   readonly summary = signal<TodoSummary | null>(null);
@@ -387,7 +388,7 @@ export class TodoListComponent {
       deadline: t.deadline ?? '',
       status: t.status,
       completedOn: t.completedOn ?? '',
-      completionNote: t.completionNote ?? ''
+      statusNote: t.statusNote ?? ''
     });
   }
 
@@ -402,7 +403,7 @@ export class TodoListComponent {
         deadline: e.deadline || null,
         status: e.status,
         completedOn: e.completedOn || null,
-        completionNote: e.completionNote.trim() || null
+        statusNote: e.statusNote.trim() || null
       }));
       this.editingItem.set(null);
       await this.refresh();

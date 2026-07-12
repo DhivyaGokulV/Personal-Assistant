@@ -5,9 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { HealthApi } from './health.api';
-import { FoodDefinition, MeasurementEntry, NutritionEntry, NutritionGoal, ReportFormat, WorkoutDefinition, WorkoutEntry, WorkoutType } from './health.models';
+import { FoodDefinition, MeasurementEntry, NutritionEntry, NutritionGoal, ReportFormat, WaterIntakeEntry, WorkoutDefinition, WorkoutEntry, WorkoutType } from './health.models';
 
-type Tab = 'measurements' | 'workouts' | 'nutrition' | 'settings';
+type Tab = 'measurements' | 'workouts' | 'nutrition' | 'water' | 'settings';
 function today(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function firstOfMonth(): string { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; }
 
@@ -15,13 +15,14 @@ function firstOfMonth(): string { const d = new Date(); return `${d.getFullYear(
   selector: 'app-health',
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
   template: `
-    <section class="container py-4">
+    <section class="container py-4 module-health">
       <a routerLink="/home" class="text-muted-soft small">Back home</a>
       <h1 class="page-title mt-2">Health & Nutrition</h1>
       <ul class="nav nav-tabs neon-tabs mb-3">
         <li class="nav-item"><button class="nav-link" [class.active]="tab()==='measurements'" (click)="tab.set('measurements')">Measurements</button></li>
         <li class="nav-item"><button class="nav-link" [class.active]="tab()==='workouts'" (click)="tab.set('workouts')">Workouts</button></li>
         <li class="nav-item"><button class="nav-link" [class.active]="tab()==='nutrition'" (click)="tab.set('nutrition')">Nutrition</button></li>
+        <li class="nav-item"><button class="nav-link" [class.active]="tab()==='water'" (click)="tab.set('water')">Water</button></li>
         <li class="nav-item"><button class="nav-link" [class.active]="tab()==='settings'" (click)="tab.set('settings')">Settings</button></li>
       </ul>
 
@@ -95,6 +96,21 @@ function firstOfMonth(): string { const d = new Date(); return `${d.getFullYear(
           }
           <div class="table-wrap surface"><table><thead><tr><th>Date</th><th>Food</th><th>Qty</th><th>Macros</th><th></th></tr></thead><tbody>@for (n of nutrition(); track n.id) { <tr><td>{{ n.date }}</td><td>{{ n.food }}</td><td>{{ n.quantity }} {{ n.unit }}</td><td>C {{ n.carbohydrates ?? 0 }} / P {{ n.protein ?? 0 }} / F {{ n.fat ?? 0 }} / Cal {{ n.calories ?? 0 }}</td><td><button class="icon-btn" (click)="editNutrition(n)">Edit</button><button class="icon-btn danger" (click)="deleteNutrition(n)">Delete</button></td></tr> }</tbody></table></div>
         }
+        @case ('water') {
+          <div class="toolbar"><button class="btn-neon btn-sm" (click)="openWater()">+ Water</button><span class="ms-auto"></span><button class="btn-link-soft btn-sm" (click)="downloadWater('Csv')">CSV</button><button class="btn-link-soft btn-sm" (click)="downloadWater('Xlsx')">Excel</button><button class="btn-link-soft btn-sm" (click)="downloadWater('Pdf')">PDF</button></div>
+          @if (waterFormOpen()) {
+            <form class="surface p-3 mb-3 grid-form" [formGroup]="waterForm" (ngSubmit)="saveWater()">
+              <label>Date *<input type="date" class="form-control form-control-sm" formControlName="date" /></label>
+              <label>Time *<input type="time" class="form-control form-control-sm" formControlName="time" /></label>
+              <label>Quantity ml *<input type="number" step="0.01" class="form-control form-control-sm" formControlName="quantityMl" /></label>
+              <label class="wide">Note<input class="form-control form-control-sm" formControlName="note" /></label>
+              @if (waterError()) { <div class="alert alert-danger py-1 px-2 small mb-0 wide">{{ waterError() }}</div> }
+              <button class="btn-neon btn-sm">Save</button><button type="button" class="btn-link-soft btn-sm" (click)="waterFormOpen.set(false)">Cancel</button>
+            </form>
+          }
+          <div class="surface p-3 mb-3">Total shown: <strong>{{ waterTotal() }}</strong> ml</div>
+          <div class="table-wrap surface"><table><thead><tr><th>Date</th><th>Time</th><th>Quantity</th><th>Note</th><th></th></tr></thead><tbody>@for (w of water(); track w.id) { <tr><td>{{ w.date }}</td><td>{{ w.time }}</td><td>{{ w.quantityMl }} ml</td><td>{{ w.note ?? '-' }}</td><td><button class="icon-btn" (click)="editWater(w)">Edit</button><button class="icon-btn danger" (click)="deleteWater(w)">Delete</button></td></tr> }</tbody></table></div>
+        }
         @case ('settings') {
           <div class="row g-3">
             <div class="col-md-6"><div class="surface p-3"><h2 class="section-title">Workout catalog</h2><form [formGroup]="definitionForm" (ngSubmit)="saveDefinition()" class="stack"><input class="form-control form-control-sm" placeholder="Name *" formControlName="name" /><select class="form-select form-select-sm" formControlName="type"><option [ngValue]="1">Weight based</option><option [ngValue]="2">Calisthenics</option><option [ngValue]="3">Cardio</option></select><input class="form-control form-control-sm" placeholder="Target muscle" formControlName="targetedMuscle" /><input class="form-control form-control-sm" placeholder="Tag" formControlName="tag" /><button class="btn-neon btn-sm">Save</button></form>@for (d of definitions(); track d.id) { <div class="list-line"><span>{{ d.name }}</span><button class="icon-btn danger" (click)="deleteDefinition(d)">Delete</button></div> }</div></div>
@@ -132,18 +148,22 @@ export class HealthComponent {
   readonly measurements = signal<MeasurementEntry[]>([]);
   readonly workouts = signal<WorkoutEntry[]>([]);
   readonly nutrition = signal<NutritionEntry[]>([]);
+  readonly water = signal<WaterIntakeEntry[]>([]);
   readonly definitions = signal<WorkoutDefinition[]>([]);
   readonly foods = signal<FoodDefinition[]>([]);
   readonly dayView = signal<any>(null);
   readonly measurementFormOpen = signal(false);
   readonly workoutFormOpen = signal(false);
   readonly nutritionFormOpen = signal(false);
+  readonly waterFormOpen = signal(false);
   readonly measurementError = signal<string | null>(null);
   readonly workoutError = signal<string | null>(null);
   readonly nutritionError = signal<string | null>(null);
+  readonly waterError = signal<string | null>(null);
   editingMeasurement: string | null = null;
   editingWorkout: string | null = null;
   editingNutrition: string | null = null;
+  editingWater: string | null = null;
   workoutFilter = '';
   readonly reportFrom = firstOfMonth();
   readonly reportTo = today();
@@ -153,16 +173,19 @@ export class HealthComponent {
   measurementForm = this.fb.group({ date: [today(), Validators.required], heightCm: [null], weightKg: [null], bmi: [null], bodyFatPercentage: [null], musclePercentage: [null], bicepsCm: [null], bellyCm: [null], forearmCm: [null], chestCm: [null], thighsCm: [null], calvesCm: [null], neckCm: [null], note: [''] });
   workoutForm = this.fb.group({ date: [today(), Validators.required], type: [1 as WorkoutType, Validators.required], workoutName: ['', Validators.required], targetedMuscle: [''], tag: [''], durationMinutes: [null], intensity: [''], distance: [null], caloriesBurned: [null], note: [''], sets: this.fb.array<any>([]) });
   nutritionForm = this.fb.group({ date: [today(), Validators.required], timeOfDay: [1, Validators.required], food: ['', Validators.required], quantity: [1, Validators.required], unit: ['unit', Validators.required], carbohydrates: [null], protein: [null], fat: [null], calories: [null], note: [''] });
+  waterForm = this.fb.group({ date: [today(), Validators.required], time: ['08:00', Validators.required], quantityMl: [250, Validators.required], note: [''] });
   goalForm = this.fb.group({ carbohydrates: [null], protein: [null], fat: [null], calories: [null] });
   definitionForm = this.fb.group({ name: ['', Validators.required], type: [1, Validators.required], targetedMuscle: [''], tag: [''] });
   foodForm = this.fb.group({ name: ['', Validators.required], unit: ['unit', Validators.required], carbohydrates: [null], protein: [null], fat: [null], calories: [null] });
   workoutType = computed(() => Number(this.workoutForm.controls.type.value) as WorkoutType);
+  waterTotal = computed(() => this.water().reduce((sum, w) => sum + Number(w.quantityMl || 0), 0));
   get sets(): FormArray { return this.workoutForm.controls.sets as FormArray; }
   constructor() { this.reload(); }
-  async reload(): Promise<void> { await Promise.all([this.loadMeasurements(), this.loadWorkouts(), this.loadNutrition(), this.loadSettings(), this.loadDay()]); }
+  async reload(): Promise<void> { await Promise.all([this.loadMeasurements(), this.loadWorkouts(), this.loadNutrition(), this.loadWater(), this.loadSettings(), this.loadDay()]); }
   async loadMeasurements() { this.measurements.set((await firstValueFrom(this.api.measurements({ pageSize: 100 }))).items); }
   async loadWorkouts() { this.workouts.set((await firstValueFrom(this.api.workouts({ workoutName: this.workoutFilter, pageSize: 100 }))).items); }
   async loadNutrition() { this.nutrition.set((await firstValueFrom(this.api.nutrition({ pageSize: 100 }))).items); }
+  async loadWater() { this.water.set((await firstValueFrom(this.api.water({ pageSize: 100 }))).items); }
   async loadSettings() { const [defs, foods, goal] = await Promise.all([firstValueFrom(this.api.workoutDefinitions()), firstValueFrom(this.api.foods()), firstValueFrom(this.api.goal())]); this.definitions.set(defs); this.foods.set(foods); this.goalForm.patchValue(goal as any); }
   async loadDay() { this.dayView.set(await firstValueFrom(this.api.day(today()))); }
   openMeasurement() { this.editingMeasurement = null; this.measurementError.set(null); this.measurementForm.reset({ date: today(), note: '' } as any); this.measurementFormOpen.set(true); }
@@ -178,6 +201,10 @@ export class HealthComponent {
   editNutrition(n: NutritionEntry) { this.editingNutrition = n.id; this.nutritionError.set(null); this.nutritionForm.patchValue(n as any); this.nutritionFormOpen.set(true); }
   async saveNutrition() { const body = this.nutritionForm.getRawValue(); if (!body.food?.trim() || !body.unit?.trim() || !body.quantity || body.quantity <= 0) { this.nutritionError.set('Food, quantity, and unit are required.'); return; } try { this.editingNutrition ? await firstValueFrom(this.api.updateNutrition(this.editingNutrition, body)) : await firstValueFrom(this.api.createNutrition(body)); this.nutritionFormOpen.set(false); await Promise.all([this.loadNutrition(), this.loadDay()]); } catch (e: any) { this.nutritionError.set(e?.error?.message ?? 'Save failed.'); } }
   async deleteNutrition(n: NutritionEntry) { if (confirm(`Delete ${n.food}?`)) { await firstValueFrom(this.api.deleteNutrition(n.id)); await this.loadNutrition(); await this.loadDay(); } }
+  openWater() { this.editingWater = null; this.waterError.set(null); this.waterForm.reset({ date: today(), time: '08:00', quantityMl: 250, note: '' } as any); this.waterFormOpen.set(true); }
+  editWater(w: WaterIntakeEntry) { this.editingWater = w.id; this.waterError.set(null); this.waterForm.patchValue(w as any); this.waterFormOpen.set(true); }
+  async saveWater() { const body = this.waterForm.getRawValue(); if (!body.date || !body.time || !body.quantityMl || body.quantityMl <= 0) { this.waterError.set('Date, time, and positive quantity are required.'); return; } try { this.editingWater ? await firstValueFrom(this.api.updateWater(this.editingWater, body)) : await firstValueFrom(this.api.createWater(body)); this.waterFormOpen.set(false); await this.loadWater(); } catch (e: any) { this.waterError.set(e?.error?.message ?? 'Save failed.'); } }
+  async deleteWater(w: WaterIntakeEntry) { if (confirm('Delete water intake entry?')) { await firstValueFrom(this.api.deleteWater(w.id)); await this.loadWater(); } }
   async saveGoal() { await firstValueFrom(this.api.saveGoal(this.goalForm.getRawValue())); await this.loadDay(); }
   async saveDefinition() { if (!this.definitionForm.value.name?.trim()) return; await firstValueFrom(this.api.createWorkoutDefinition(this.definitionForm.getRawValue())); this.definitionForm.reset({ type: 1 } as any); await this.loadSettings(); }
   async deleteDefinition(d: WorkoutDefinition) { if (confirm(`Delete ${d.name}?`)) { await firstValueFrom(this.api.deleteWorkoutDefinition(d.id)); await this.loadSettings(); } }
@@ -188,5 +215,6 @@ export class HealthComponent {
   downloadMeasurements(format: ReportFormat) { this.download(this.api.downloadMeasurements(this.reportFrom, this.reportTo, format), `measurements.${format.toLowerCase()}`); }
   downloadWorkouts(format: ReportFormat) { this.download(this.api.downloadWorkouts(this.reportFrom, this.reportTo, this.workoutFilter, format), `workouts.${format.toLowerCase()}`); }
   downloadNutrition(format: ReportFormat) { this.download(this.api.downloadNutrition(this.reportFrom, this.reportTo, format), `nutrition.${format.toLowerCase()}`); }
+  downloadWater(format: ReportFormat) { this.download(this.api.downloadWater(this.reportFrom, this.reportTo, format), `water.${format.toLowerCase()}`); }
   async download(req: any, filename: string) { const res: any = await firstValueFrom(req); const url = URL.createObjectURL(res.body!); const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
 }

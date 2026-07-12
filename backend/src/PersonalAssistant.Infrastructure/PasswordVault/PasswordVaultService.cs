@@ -24,7 +24,7 @@ public class PasswordVaultService : IPasswordVaultService
         var setting = await _db.PasswordVaultSettings.FirstOrDefaultAsync(x => x.OwnerUserId == OwnerId, ct);
         return setting is null
             ? new PasswordVaultStatusDto(false, null, null, null, null)
-            : new PasswordVaultStatusDto(true, setting.Salt, setting.VerifierCipherText, setting.VerifierIv, setting.KdfIterations);
+            : MapStatus(setting);
     }
 
     public async Task<PasswordVaultStatusDto> InitializeAsync(InitializeVaultRequest req, CancellationToken ct)
@@ -32,15 +32,52 @@ public class PasswordVaultService : IPasswordVaultService
         if (string.IsNullOrWhiteSpace(req.Salt) || string.IsNullOrWhiteSpace(req.VerifierCipherText) || string.IsNullOrWhiteSpace(req.VerifierIv))
             throw new ArgumentException("Vault salt and verifier are required.");
         if (req.KdfIterations < 100_000) throw new ArgumentException("KDF iterations must be at least 100000.");
+        ValidateWrappedKey(req.MasterWrappedKeyCipherText, req.MasterWrappedKeyIv, "Master wrapped key");
+        ValidateRecoveryMetadata(req);
 
         var owner = OwnerId;
         var existing = await _db.PasswordVaultSettings.FirstOrDefaultAsync(x => x.OwnerUserId == owner, ct);
         if (existing is not null) throw new InvalidOperationException("Password vault is already initialized.");
 
-        var setting = new PasswordVaultSetting { OwnerUserId = owner, Salt = req.Salt, VerifierCipherText = req.VerifierCipherText, VerifierIv = req.VerifierIv, KdfIterations = req.KdfIterations };
+        var setting = new PasswordVaultSetting
+        {
+            OwnerUserId = owner,
+            Salt = req.Salt,
+            VerifierCipherText = req.VerifierCipherText,
+            VerifierIv = req.VerifierIv,
+            KdfIterations = req.KdfIterations,
+            MasterWrappedKeyCipherText = req.MasterWrappedKeyCipherText,
+            MasterWrappedKeyIv = req.MasterWrappedKeyIv,
+            RecoverySalt = req.RecoverySalt,
+            RecoveryVerifierCipherText = req.RecoveryVerifierCipherText,
+            RecoveryVerifierIv = req.RecoveryVerifierIv,
+            RecoveryWrappedKeyCipherText = req.RecoveryWrappedKeyCipherText,
+            RecoveryWrappedKeyIv = req.RecoveryWrappedKeyIv,
+            RecoveryKdfIterations = req.RecoveryKdfIterations
+        };
         _db.PasswordVaultSettings.Add(setting);
         await _db.SaveChangesAsync(ct);
-        return new PasswordVaultStatusDto(true, setting.Salt, setting.VerifierCipherText, setting.VerifierIv, setting.KdfIterations);
+        return MapStatus(setting);
+    }
+
+    public async Task<PasswordVaultStatusDto> ResetMasterPasswordAsync(ResetMasterPasswordRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.Salt) || string.IsNullOrWhiteSpace(req.VerifierCipherText) || string.IsNullOrWhiteSpace(req.VerifierIv))
+            throw new ArgumentException("Vault salt and verifier are required.");
+        if (string.IsNullOrWhiteSpace(req.MasterWrappedKeyCipherText) || string.IsNullOrWhiteSpace(req.MasterWrappedKeyIv))
+            throw new ArgumentException("Wrapped vault key is required.");
+        if (req.KdfIterations < 100_000) throw new ArgumentException("KDF iterations must be at least 100000.");
+
+        var setting = await _db.PasswordVaultSettings.FirstOrDefaultAsync(x => x.OwnerUserId == OwnerId, ct)
+            ?? throw new KeyNotFoundException("Password vault is not initialized.");
+        setting.Salt = req.Salt;
+        setting.VerifierCipherText = req.VerifierCipherText;
+        setting.VerifierIv = req.VerifierIv;
+        setting.KdfIterations = req.KdfIterations;
+        setting.MasterWrappedKeyCipherText = req.MasterWrappedKeyCipherText;
+        setting.MasterWrappedKeyIv = req.MasterWrappedKeyIv;
+        await _db.SaveChangesAsync(ct);
+        return MapStatus(setting);
     }
 
     public async Task<IReadOnlyList<PasswordGroupDto>> ListGroupsAsync(CancellationToken ct)
@@ -156,6 +193,31 @@ public class PasswordVaultService : IPasswordVaultService
         if (req.HasEmail && (req.Email is null || string.IsNullOrWhiteSpace(req.Email.CipherText) || string.IsNullOrWhiteSpace(req.Email.Iv))) throw new ArgumentException("Encrypted email is required.");
     }
 
+    private static void ValidateWrappedKey(string? cipherText, string? iv, string label)
+    {
+        if (string.IsNullOrWhiteSpace(cipherText) != string.IsNullOrWhiteSpace(iv))
+            throw new ArgumentException($"{label} ciphertext and IV must be provided together.");
+    }
+
+    private static void ValidateRecoveryMetadata(InitializeVaultRequest req)
+    {
+        var values = new[]
+        {
+            req.RecoverySalt,
+            req.RecoveryVerifierCipherText,
+            req.RecoveryVerifierIv,
+            req.RecoveryWrappedKeyCipherText,
+            req.RecoveryWrappedKeyIv
+        };
+        var any = values.Any(x => !string.IsNullOrWhiteSpace(x)) || req.RecoveryKdfIterations.HasValue;
+        if (!any) return;
+
+        if (values.Any(string.IsNullOrWhiteSpace) || !req.RecoveryKdfIterations.HasValue)
+            throw new ArgumentException("Recovery salt, verifier, wrapped key, IVs, and KDF iterations are required together.");
+        if (req.RecoveryKdfIterations.Value < 100_000)
+            throw new ArgumentException("Recovery KDF iterations must be at least 100000.");
+    }
+
     private static void ApplyEntry(PasswordEntry e, PasswordEntryRequest r)
     {
         e.GroupId = r.GroupId; e.Name = r.Name.Trim(); e.HasUsername = r.HasUsername; e.HasEmail = r.HasEmail;
@@ -166,6 +228,20 @@ public class PasswordVaultService : IPasswordVaultService
     }
 
     private static PasswordGroupDto MapGroup(PasswordGroup g) => new(g.Id, g.Name, g.Description, g.Entries.Count);
+    private static PasswordVaultStatusDto MapStatus(PasswordVaultSetting setting) => new(
+        true,
+        setting.Salt,
+        setting.VerifierCipherText,
+        setting.VerifierIv,
+        setting.KdfIterations,
+        setting.MasterWrappedKeyCipherText,
+        setting.MasterWrappedKeyIv,
+        setting.RecoverySalt,
+        setting.RecoveryVerifierCipherText,
+        setting.RecoveryVerifierIv,
+        setting.RecoveryWrappedKeyCipherText,
+        setting.RecoveryWrappedKeyIv,
+        setting.RecoveryKdfIterations);
     private static PasswordEntryDto MapEntry(PasswordEntry e) => new(
         e.Id, e.GroupId, e.Group?.Name ?? "", e.Name, e.HasUsername, e.HasEmail,
         Field(e.UsernameCipherText, e.UsernameIv), Field(e.EmailCipherText, e.EmailIv), Field(e.PasswordCipherText, e.PasswordIv),

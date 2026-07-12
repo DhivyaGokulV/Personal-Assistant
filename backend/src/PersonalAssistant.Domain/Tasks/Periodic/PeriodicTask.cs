@@ -11,6 +11,7 @@ public class PeriodicTask : EntityBase
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public TaskActiveStatus Status { get; set; } = TaskActiveStatus.Active;
+    public int DisplayOrder { get; set; }
 
     public int FrequencyValue { get; set; } = 1;
     public FrequencyUnit FrequencyUnit { get; set; } = FrequencyUnit.Days;

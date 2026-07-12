@@ -18,12 +18,8 @@ function isoOffset(days: number): string {
     <div class="reports-panel surface p-3">
       <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
         <div>
-          <label class="form-label small text-muted-soft mb-1">From (added)</label>
-          <input type="date" class="form-control form-control-sm" [(ngModel)]="from" />
-        </div>
-        <div>
-          <label class="form-label small text-muted-soft mb-1">To (added)</label>
-          <input type="date" class="form-control form-control-sm" [(ngModel)]="to" />
+          <label class="form-label small text-muted-soft mb-1">Report date</label>
+          <input type="date" class="form-control form-control-sm" [(ngModel)]="asOf" />
         </div>
         <div class="d-flex gap-2 ms-auto">
           <button class="btn-neon btn-sm" type="button" [disabled]="loading()" (click)="loadView()">
@@ -41,7 +37,7 @@ function isoOffset(days: number): string {
 
       @if (report(); as r) {
         <div class="report-summary small text-muted-soft mb-2">
-          {{ r.rows.length }} tasks · {{ r.from }} → {{ r.to }}
+          {{ r.rows.length }} tasks as of {{ r.asOf }}
         </div>
         @if (r.rows.length === 0) {
           <div class="text-muted-soft small">No tasks added in this range.</div>
@@ -68,7 +64,7 @@ function isoOffset(days: number): string {
                     <td class="text-end">{{ row.daysLeft ?? '—' }}</td>
                     <td>{{ statusLabel(row.status) }}</td>
                     <td>{{ row.completedOn ?? '—' }}</td>
-                    <td class="text-muted-soft">{{ row.completionNote }}</td>
+                    <td class="text-muted-soft">{{ row.statusNote }}</td>
                   </tr>
                 }
               </tbody>
@@ -112,8 +108,7 @@ function isoOffset(days: number): string {
 export class TodoReportsComponent {
   private readonly api = inject(TodoApi);
 
-  from = isoOffset(-30);
-  to = isoOffset(0);
+  asOf = isoOffset(0);
 
   readonly report = signal<TodoReport | null>(null);
   readonly loading = signal(false);
@@ -128,7 +123,7 @@ export class TodoReportsComponent {
     this.errorMessage.set(null);
     this.loading.set(true);
     try {
-      const r = await firstValueFrom(this.api.getReport(this.from, this.to));
+      const r = await firstValueFrom(this.api.getReport(this.asOf));
       this.report.set(r);
     } catch {
       this.errorMessage.set('Failed to load report.');
@@ -141,10 +136,10 @@ export class TodoReportsComponent {
     this.errorMessage.set(null);
     this.downloading.set(true);
     try {
-      const res = await firstValueFrom(this.api.downloadReport(this.from, this.to, format));
+      const res = await firstValueFrom(this.api.downloadReport(this.asOf, format));
       const blob = res.body!;
       const filename = parseFilename(res.headers.get('content-disposition'))
-        ?? `todos-${this.from}-to-${this.to}.${format.toLowerCase()}`;
+        ?? `todos-${this.asOf}.${format.toLowerCase()}`;
       triggerDownload(blob, filename);
     } catch {
       this.errorMessage.set('Download failed.');

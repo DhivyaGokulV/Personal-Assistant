@@ -39,7 +39,7 @@ export class TodoApi {
     deadline?: string | null;
     status: TodoStatus;
     completedOn?: string | null;
-    completionNote?: string | null;
+    statusNote?: string | null;
   }): Observable<Todo> {
     return this.http.put<Todo>(`${this.base}/${id}`, req);
   }
@@ -48,15 +48,15 @@ export class TodoApi {
     return this.http.delete<void>(`${this.base}/${id}`);
   }
 
-  getReport(from: string, to: string): Observable<TodoReport> {
+  getReport(asOf: string): Observable<TodoReport> {
     return this.http.get<TodoReport>(`${this.base}/reports`, {
-      params: new HttpParams().set('from', from).set('to', to).set('format', 'Json')
+      params: new HttpParams().set('asOf', asOf).set('format', 'Json')
     });
   }
 
-  downloadReport(from: string, to: string, format: ReportFormat): Observable<HttpResponse<Blob>> {
+  downloadReport(asOf: string, format: ReportFormat): Observable<HttpResponse<Blob>> {
     return this.http.get(`${this.base}/reports`, {
-      params: new HttpParams().set('from', from).set('to', to).set('format', format),
+      params: new HttpParams().set('asOf', asOf).set('format', format),
       responseType: 'blob',
       observe: 'response'
     });

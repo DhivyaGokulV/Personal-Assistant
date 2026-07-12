@@ -12,6 +12,7 @@ public class DailyTaskGroupConfiguration : IEntityTypeConfiguration<DailyTaskGro
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).IsRequired().HasMaxLength(200);
         b.Property(x => x.Description).HasMaxLength(2000);
+        b.Property(x => x.DisplayOrder).HasDefaultValue(0);
         b.HasIndex(x => new { x.OwnerUserId, x.IsDeleted });
         b.HasQueryFilter(x => !x.IsDeleted);
 

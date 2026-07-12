@@ -8,6 +8,14 @@ public class PasswordVaultSetting : EntityBase
     public string VerifierCipherText { get; set; } = string.Empty;
     public string VerifierIv { get; set; } = string.Empty;
     public int KdfIterations { get; set; }
+    public string? MasterWrappedKeyCipherText { get; set; }
+    public string? MasterWrappedKeyIv { get; set; }
+    public string? RecoverySalt { get; set; }
+    public string? RecoveryVerifierCipherText { get; set; }
+    public string? RecoveryVerifierIv { get; set; }
+    public string? RecoveryWrappedKeyCipherText { get; set; }
+    public string? RecoveryWrappedKeyIv { get; set; }
+    public int? RecoveryKdfIterations { get; set; }
 }
 
 public class PasswordGroup : EntityBase

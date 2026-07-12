@@ -9,6 +9,7 @@ using PersonalAssistant.Domain.PasswordVault;
 using PersonalAssistant.Domain.Tasks.Daily;
 using PersonalAssistant.Domain.Tasks.Periodic;
 using PersonalAssistant.Domain.Tasks.Todo;
+using PersonalAssistant.Domain.Tasks;
 using PersonalAssistant.Domain.TimeTracker;
 
 namespace PersonalAssistant.Infrastructure.Persistence;
@@ -26,6 +27,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<PeriodicTaskHistory> PeriodicTaskHistory => Set<PeriodicTaskHistory>();
 
     public DbSet<TodoItem> Todos => Set<TodoItem>();
+    public DbSet<TaskArchiveEntry> TaskArchiveEntries => Set<TaskArchiveEntry>();
 
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<Category> Categories => Set<Category>();
@@ -34,6 +36,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<TransactionTag> TransactionTags => Set<TransactionTag>();
     public DbSet<Budget> Budgets => Set<Budget>();
+    public DbSet<BudgetEntry> BudgetEntries => Set<BudgetEntry>();
 
     public DbSet<AssetTag> AssetTags => Set<AssetTag>();
     public DbSet<AssetGroup> AssetGroups => Set<AssetGroup>();
@@ -43,6 +46,20 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<Investment> Investments => Set<Investment>();
     public DbSet<InvestmentPriceHistory> InvestmentPriceHistory => Set<InvestmentPriceHistory>();
     public DbSet<InvestmentTransaction> InvestmentTransactions => Set<InvestmentTransaction>();
+    public DbSet<InvestmentStatusHistory> InvestmentStatusHistory => Set<InvestmentStatusHistory>();
+    public DbSet<InvestmentAuditEntry> InvestmentAuditEntries => Set<InvestmentAuditEntry>();
+    public DbSet<PreciousMetal> PreciousMetals => Set<PreciousMetal>();
+    public DbSet<PreciousMetalTransaction> PreciousMetalTransactions => Set<PreciousMetalTransaction>();
+    public DbSet<PreciousMetalPriceHistory> PreciousMetalPriceHistory => Set<PreciousMetalPriceHistory>();
+    public DbSet<PreciousMetalAuditEntry> PreciousMetalAuditEntries => Set<PreciousMetalAuditEntry>();
+    public DbSet<JewelleryItem> JewelleryItems => Set<JewelleryItem>();
+    public DbSet<JewelleryAuditEntry> JewelleryAuditEntries => Set<JewelleryAuditEntry>();
+    public DbSet<PersonalAssetItem> PersonalAssetItems => Set<PersonalAssetItem>();
+    public DbSet<PersonalAssetAuditEntry> PersonalAssetAuditEntries => Set<PersonalAssetAuditEntry>();
+    public DbSet<LiabilityAccount> LiabilityAccounts => Set<LiabilityAccount>();
+    public DbSet<LiabilityAccountEntry> LiabilityAccountEntries => Set<LiabilityAccountEntry>();
+    public DbSet<LiabilityAccountStatusHistory> LiabilityAccountStatusHistory => Set<LiabilityAccountStatusHistory>();
+    public DbSet<LiabilityAccountAuditEntry> LiabilityAccountAuditEntries => Set<LiabilityAccountAuditEntry>();
     public DbSet<Liability> Liabilities => Set<Liability>();
     public DbSet<LiabilityHistory> LiabilityHistory => Set<LiabilityHistory>();
 
@@ -55,6 +72,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, ApplicationRole, 
     public DbSet<FoodDefinition> FoodDefinitions => Set<FoodDefinition>();
     public DbSet<NutritionEntry> NutritionEntries => Set<NutritionEntry>();
     public DbSet<NutritionGoal> NutritionGoals => Set<NutritionGoal>();
+    public DbSet<WaterIntakeEntry> WaterIntakeEntries => Set<WaterIntakeEntry>();
 
     public DbSet<GoalPlan> GoalPlans => Set<GoalPlan>();
     public DbSet<Goal> Goals => Set<Goal>();

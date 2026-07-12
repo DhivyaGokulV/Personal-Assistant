@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using PersonalAssistant.Application.AssetTracker.Common;
 using PersonalAssistant.Application.AssetTracker.Investments;
 using PersonalAssistant.Application.Common.Interfaces;
@@ -20,484 +21,546 @@ public class InvestmentService : IInvestmentService
     }
 
     private Guid OwnerId => _user.UserId ?? throw new InvalidOperationException("No authenticated user.");
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
 
-    // ===== Groups =====
-    public async Task<IReadOnlyList<InvestmentGroupDto>> GetGroupsAsync(InvestmentStatus? status, CancellationToken ct)
+    public async Task<InvestmentPage<InvestmentDto>> ListAsync(InvestmentQuery query, CancellationToken ct)
     {
-        var owner = OwnerId;
-        var q = _db.InvestmentGroups.Include(g => g.Tag).Where(g => g.OwnerUserId == owner);
-        if (status.HasValue) q = q.Where(g => g.Status == status.Value);
-
-        var groups = await q.OrderBy(g => g.Name).ToListAsync(ct);
-
-        // Compute aggregates per group
-        var investmentMetrics = await ComputeAllInvestmentMetricsAsync(owner, ct);
-        var byGroup = investmentMetrics
-            .GroupBy(m => m.GroupId)
-            .ToDictionary(
-                g => g.Key,
-                g => (Invested: g.Sum(x => x.Invested), Current: g.Sum(x => x.CurrentValue)));
-
-        return groups.Select(g =>
-        {
-            byGroup.TryGetValue(g.Id, out var stats);
-            var pl = stats.Current - stats.Invested;
-            return new InvestmentGroupDto(
-                g.Id, g.Name, g.Description,
-                g.Tag is null ? null : new AssetTagBadge(g.Tag.Id, g.Tag.Name, g.Tag.Color),
-                g.Status, stats.Invested, stats.Current, pl);
-        }).ToList();
-    }
-
-    public async Task<InvestmentGroupDto> CreateGroupAsync(CreateInvestmentGroupRequest req, CancellationToken ct)
-    {
-        var owner = OwnerId;
-        await ValidateTagAsync(owner, req.TagId, ct);
-        var entity = new InvestmentGroup
-        {
-            OwnerUserId = owner,
-            Name = req.Name.Trim(),
-            Description = req.Description?.Trim(),
-            TagId = req.TagId,
-            Status = req.Status
-        };
-        _db.InvestmentGroups.Add(entity);
-        await _db.SaveChangesAsync(ct);
-
-        return new InvestmentGroupDto(
-            entity.Id, entity.Name, entity.Description, null, entity.Status, 0, 0, 0);
-    }
-
-    public async Task<InvestmentGroupDto> UpdateGroupAsync(Guid id, UpdateInvestmentGroupRequest req, CancellationToken ct)
-    {
-        var owner = OwnerId;
-        var entity = await _db.InvestmentGroups.FirstOrDefaultAsync(g => g.Id == id && g.OwnerUserId == owner, ct)
-            ?? throw new KeyNotFoundException("Investment group not found.");
-        await ValidateTagAsync(owner, req.TagId, ct);
-
-        entity.Name = req.Name.Trim();
-        entity.Description = req.Description?.Trim();
-        entity.TagId = req.TagId;
-        entity.Status = req.Status;
-        await _db.SaveChangesAsync(ct);
-
-        var groups = await GetGroupsAsync(null, ct);
-        return groups.First(g => g.Id == id);
-    }
-
-    public async Task DeleteGroupAsync(Guid id, CancellationToken ct)
-    {
-        var owner = OwnerId;
-        var entity = await _db.InvestmentGroups
-            .Include(g => g.Investments).ThenInclude(i => i.PriceHistory)
-            .Include(g => g.Investments).ThenInclude(i => i.Transactions)
-            .FirstOrDefaultAsync(g => g.Id == id && g.OwnerUserId == owner, ct)
-            ?? throw new KeyNotFoundException("Investment group not found.");
-
-        foreach (var inv in entity.Investments)
-        {
-            _db.InvestmentPriceHistory.RemoveRange(inv.PriceHistory);
-            _db.InvestmentTransactions.RemoveRange(inv.Transactions);
-        }
-        _db.Investments.RemoveRange(entity.Investments);
-        _db.InvestmentGroups.Remove(entity);
-        await _db.SaveChangesAsync(ct);
-    }
-
-    // ===== Investments =====
-    public async Task<IReadOnlyList<InvestmentDto>> ListAsync(InvestmentStatus? status, Guid? tagId, Guid? groupId, CancellationToken ct)
-    {
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var owner = OwnerId;
         var q = _db.Investments
-            .Include(i => i.Group)
-            .Include(i => i.Tag)
-            .Where(i => i.OwnerUserId == owner);
+            .AsNoTracking()
+            .Include(x => x.Tag)
+            .Include(x => x.Transactions)
+            .Include(x => x.PriceHistory)
+            .Where(x => x.OwnerUserId == owner);
 
-        if (status.HasValue) q = q.Where(i => i.Status == status.Value);
-        if (tagId.HasValue) q = q.Where(i => i.TagId == tagId.Value);
-        if (groupId.HasValue) q = q.Where(i => i.GroupId == groupId.Value);
-
-        var investments = await q.OrderBy(i => i.Group!.Name).ThenBy(i => i.Name).ToListAsync(ct);
-
-        var metrics = await ComputeMetricsForAsync(investments.Select(i => i.Id).ToList(), ct);
-
-        return investments.Select(i =>
+        if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            metrics.TryGetValue(i.Id, out var m);
-            return new InvestmentDto(
-                i.Id, i.GroupId, i.Group!.Name, i.Name, i.Description,
-                i.Tag is null ? null : new AssetTagBadge(i.Tag.Id, i.Tag.Name, i.Tag.Color),
-                i.Unit, i.Status,
-                m?.CurrentPrice, m?.LastPriceAsOf,
-                m?.UnitsHolding ?? 0,
-                m?.AverageBuyPrice ?? 0,
-                m?.CurrentValue ?? 0,
-                m?.Invested ?? 0,
-                m?.ProfitLoss ?? 0);
-        }).ToList();
+            var search = query.Search.Trim();
+            q = q.Where(x => x.Name.Contains(search) || (x.Description != null && x.Description.Contains(search)));
+        }
+        if (query.Status.HasValue) q = q.Where(x => x.Status == query.Status);
+        if (query.Type.HasValue) q = q.Where(x => x.InvestmentType == query.Type);
+        if (query.TagId.HasValue) q = q.Where(x => x.TagId == query.TagId);
+        if (!string.IsNullOrWhiteSpace(query.Currency))
+        {
+            var currency = query.Currency.Trim().ToUpperInvariant();
+            q = q.Where(x => x.CurrencyCode == currency);
+        }
+
+        var rows = (await q.ToListAsync(ct)).Select(Map).ToList();
+        rows = (query.SortBy, query.SortDirection) switch
+        {
+            (InvestmentSort.CreationDate, SortDirection.Asc) => rows.OrderBy(x => x.CreationDate).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.CreationDate, SortDirection.Desc) => rows.OrderByDescending(x => x.CreationDate).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.CurrentValue, SortDirection.Asc) => rows.OrderBy(x => x.CurrentValue).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.CurrentValue, SortDirection.Desc) => rows.OrderByDescending(x => x.CurrentValue).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.ProfitLossPercent, SortDirection.Asc) => rows.OrderBy(x => x.ProfitLossPercent).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.ProfitLossPercent, SortDirection.Desc) => rows.OrderByDescending(x => x.ProfitLossPercent).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.Status, SortDirection.Asc) => rows.OrderBy(x => x.Status).ThenBy(x => x.Name).ToList(),
+            (InvestmentSort.Status, SortDirection.Desc) => rows.OrderByDescending(x => x.Status).ThenBy(x => x.Name).ToList(),
+            (_, SortDirection.Desc) => rows.OrderByDescending(x => x.Name).ToList(),
+            _ => rows.OrderBy(x => x.Name).ToList()
+        };
+
+        var total = rows.Count;
+        return new InvestmentPage<InvestmentDto>(rows.Skip((page - 1) * pageSize).Take(pageSize).ToList(), page, pageSize, total);
     }
 
     public async Task<InvestmentDetailDto> GetAsync(Guid id, CancellationToken ct)
     {
-        var owner = OwnerId;
-        var entity = await _db.Investments
-            .Include(i => i.Group)
-            .Include(i => i.Tag)
-            .Include(i => i.PriceHistory.OrderByDescending(p => p.AsOf))
-            .Include(i => i.Transactions.OrderByDescending(t => t.Date))
-            .FirstOrDefaultAsync(i => i.Id == id && i.OwnerUserId == owner, ct)
+        var entity = await InvestmentQuery(id).Include(x => x.StatusHistory).FirstOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Investment not found.");
-
-        var metrics = (await ComputeMetricsForAsync(new List<Guid> { id }, ct)).GetValueOrDefault(id);
-
-        var dto = new InvestmentDto(
-            entity.Id, entity.GroupId, entity.Group!.Name, entity.Name, entity.Description,
-            entity.Tag is null ? null : new AssetTagBadge(entity.Tag.Id, entity.Tag.Name, entity.Tag.Color),
-            entity.Unit, entity.Status,
-            metrics?.CurrentPrice, metrics?.LastPriceAsOf,
-            metrics?.UnitsHolding ?? 0,
-            metrics?.AverageBuyPrice ?? 0,
-            metrics?.CurrentValue ?? 0,
-            metrics?.Invested ?? 0,
-            metrics?.ProfitLoss ?? 0);
-
-        var prices = entity.PriceHistory
-            .OrderByDescending(p => p.AsOf).ThenByDescending(p => p.CreatedAt)
-            .Select(p => new InvestmentPriceHistoryDto(p.Id, p.AsOf, p.Price, p.Note))
-            .ToList();
-
-        var txs = entity.Transactions
-            .OrderByDescending(t => t.Date).ThenByDescending(t => t.CreatedAt)
-            .Select(t => new InvestmentTxDto(t.Id, t.Date, t.Type, t.Units, t.Price, t.Units * t.Price, t.Note))
-            .ToList();
-
-        return new InvestmentDetailDto(dto, prices, txs);
+        return new InvestmentDetailDto(Map(entity), entity.StatusHistory
+            .OrderByDescending(x => x.EffectiveDate).ThenByDescending(x => x.CreatedAt)
+            .Select(MapStatus).ToList());
     }
 
-    public async Task<InvestmentDto> CreateAsync(CreateInvestmentRequest req, CancellationToken ct)
+    public async Task<InvestmentDto> CreateAsync(CreateInvestmentRequest request, CancellationToken ct)
     {
-        if (req.CurrentPrice <= 0) throw new ArgumentException("Current price must be positive.");
-        if (string.IsNullOrWhiteSpace(req.Unit)) throw new ArgumentException("Unit is required.");
+        ValidateInvestment(request.Name, request.Description, request.CurrencyCode, request.CreationDate);
+        if (!Enum.IsDefined(request.InvestmentType)) throw new ArgumentException("Investment type is required.");
+        if (request.TagId.HasValue && !string.IsNullOrWhiteSpace(request.NewTagName))
+            throw new ArgumentException("Select an existing tag or create a new tag, not both.");
 
         var owner = OwnerId;
-        var groupOk = await _db.InvestmentGroups.AnyAsync(g => g.Id == req.GroupId && g.OwnerUserId == owner, ct);
-        if (!groupOk) throw new KeyNotFoundException("Investment group not found.");
-        await ValidateTagAsync(owner, req.TagId, ct);
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        Guid? tagId = request.TagId;
+        if (tagId.HasValue)
+        {
+            if (!await _db.AssetTags.AnyAsync(x => x.Id == tagId && x.OwnerUserId == owner, ct))
+                throw new KeyNotFoundException("Tag not found.");
+        }
+        else if (!string.IsNullOrWhiteSpace(request.NewTagName))
+        {
+            var tagName = request.NewTagName.Trim();
+            if (tagName.Length > 50) throw new ArgumentException("Tag must not exceed 50 characters.");
+            var existing = await _db.AssetTags.FirstOrDefaultAsync(x => x.OwnerUserId == owner && x.Name == tagName, ct);
+            if (existing is not null) tagId = existing.Id;
+            else
+            {
+                var tag = new AssetTag { OwnerUserId = owner, Name = tagName, Color = "#6c5ce7" };
+                _db.AssetTags.Add(tag);
+                tagId = tag.Id;
+            }
+        }
 
+        var groupId = await GetLegacyGroupIdAsync(owner, ct);
         var entity = new Investment
         {
             OwnerUserId = owner,
-            GroupId = req.GroupId,
-            Name = req.Name.Trim(),
-            Description = req.Description?.Trim(),
-            TagId = req.TagId,
-            Unit = req.Unit.Trim(),
+            GroupId = groupId,
+            Name = request.Name.Trim(),
+            Description = Clean(request.Description),
+            TagId = tagId,
+            InvestmentType = request.InvestmentType,
+            CurrencyCode = "INR",
+            CreationDate = request.CreationDate,
+            Unit = "unit",
             Status = InvestmentStatus.Active
         };
-        entity.PriceHistory.Add(new InvestmentPriceHistory
+        var status = new InvestmentStatusHistory
         {
             OwnerUserId = owner,
-            AsOf = DateOnly.FromDateTime(DateTime.UtcNow),
-            Price = req.CurrentPrice,
-            Note = "Initial"
-        });
-
+            InvestmentId = entity.Id,
+            Status = InvestmentStatus.Active,
+            EffectiveDate = request.CreationDate
+        };
+        entity.StatusHistory.Add(status);
         _db.Investments.Add(entity);
+        AddAudit(entity.Id, "Investment", entity.Id, InvestmentAuditAction.Create, null, Snapshot(entity), null);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
-        var list = await ListAsync(null, null, entity.GroupId, ct);
-        return list.First(i => i.Id == entity.Id);
+        return (await GetAsync(entity.Id, ct)).Investment;
     }
 
-    public async Task<InvestmentDto> UpdateAsync(Guid id, UpdateInvestmentRequest req, CancellationToken ct)
+    public async Task<InvestmentDto> UpdateAsync(Guid id, UpdateInvestmentRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(req.Unit)) throw new ArgumentException("Unit is required.");
-
-        var owner = OwnerId;
-        var entity = await _db.Investments.FirstOrDefaultAsync(i => i.Id == id && i.OwnerUserId == owner, ct)
+        ValidateInvestment(request.Name, request.Description, "INR", null);
+        var entity = await InvestmentQuery(id).FirstOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Investment not found.");
-
-        if (entity.GroupId != req.GroupId)
+        await ValidateTagAsync(request.TagId, ct);
+        var old = Snapshot(entity);
+        var changed = new List<string>();
+        if (entity.Name != request.Name.Trim()) changed.Add("name");
+        if (entity.Description != Clean(request.Description)) changed.Add("description");
+        if (entity.TagId != request.TagId) changed.Add("tagId");
+        entity.Name = request.Name.Trim();
+        entity.Description = Clean(request.Description);
+        entity.TagId = request.TagId;
+        if (changed.Count > 0)
         {
-            var groupOk = await _db.InvestmentGroups.AnyAsync(g => g.Id == req.GroupId && g.OwnerUserId == owner, ct);
-            if (!groupOk) throw new KeyNotFoundException("Target group not found.");
-            entity.GroupId = req.GroupId;
+            AddAudit(id, "Investment", id, InvestmentAuditAction.Update, old, Snapshot(entity), changed);
+            await _db.SaveChangesAsync(ct);
         }
-        await ValidateTagAsync(owner, req.TagId, ct);
-
-        entity.Name = req.Name.Trim();
-        entity.Description = req.Description?.Trim();
-        entity.TagId = req.TagId;
-        entity.Unit = req.Unit.Trim();
-
-        await _db.SaveChangesAsync(ct);
-        var list = await ListAsync(null, null, entity.GroupId, ct);
-        return list.First(i => i.Id == id);
+        return (await GetAsync(id, ct)).Investment;
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
     {
-        var owner = OwnerId;
-        var entity = await _db.Investments
-            .Include(i => i.PriceHistory)
-            .Include(i => i.Transactions)
-            .FirstOrDefaultAsync(i => i.Id == id && i.OwnerUserId == owner, ct)
+        var entity = await InvestmentQuery(id).Include(x => x.StatusHistory).FirstOrDefaultAsync(ct)
             ?? throw new KeyNotFoundException("Investment not found.");
-        _db.InvestmentPriceHistory.RemoveRange(entity.PriceHistory);
+        var snapshot = JsonSerializer.Serialize(new
+        {
+            Investment = Snapshot(entity),
+            Entries = entity.Transactions.Select(Snapshot),
+            Prices = entity.PriceHistory.Select(Snapshot),
+            Statuses = entity.StatusHistory.Select(Snapshot)
+        });
+        AddAudit(id, "Investment", id, InvestmentAuditAction.Delete, snapshot, null, null);
         _db.InvestmentTransactions.RemoveRange(entity.Transactions);
+        _db.InvestmentPriceHistory.RemoveRange(entity.PriceHistory);
+        _db.InvestmentStatusHistory.RemoveRange(entity.StatusHistory);
         _db.Investments.Remove(entity);
         await _db.SaveChangesAsync(ct);
     }
 
-    // ===== Price history =====
-    public async Task<InvestmentPriceHistoryDto> AddPriceAsync(Guid investmentId, AddInvestmentPriceRequest req, CancellationToken ct)
+    public async Task<IReadOnlyList<InvestmentStatusDto>> GetStatusHistoryAsync(Guid id, CancellationToken ct)
     {
-        if (req.Price <= 0) throw new ArgumentException("Price must be positive.");
-        var owner = OwnerId;
-        var ok = await _db.Investments.AnyAsync(i => i.Id == investmentId && i.OwnerUserId == owner, ct);
-        if (!ok) throw new KeyNotFoundException("Investment not found.");
+        await EnsureInvestmentAsync(id, ct);
+        return await _db.InvestmentStatusHistory.AsNoTracking()
+            .Where(x => x.InvestmentId == id && x.OwnerUserId == OwnerId)
+            .OrderByDescending(x => x.EffectiveDate).ThenByDescending(x => x.CreatedAt)
+            .Select(x => new InvestmentStatusDto(x.Id, x.Status, x.EffectiveDate)).ToListAsync(ct);
+    }
 
+    public async Task<InvestmentStatusDto> ChangeStatusAsync(Guid id, ChangeInvestmentStatusRequest request, CancellationToken ct)
+    {
+        if (!Enum.IsDefined(request.Status)) throw new ArgumentException("Status is required.");
+        var entity = await EnsureInvestmentAsync(id, ct);
+        ValidateDate(request.EffectiveDate, entity.CreationDate);
+        if (await _db.InvestmentStatusHistory.AnyAsync(x => x.InvestmentId == id && x.EffectiveDate == request.EffectiveDate, ct))
+            throw new InvalidOperationException("A status entry already exists for this date.");
+        var status = new InvestmentStatusHistory
+        {
+            OwnerUserId = OwnerId, InvestmentId = id, Status = request.Status, EffectiveDate = request.EffectiveDate
+        };
+        _db.InvestmentStatusHistory.Add(status);
+        AddAudit(id, "Status", status.Id, InvestmentAuditAction.StatusChange, null, Snapshot(status), null);
+        var latest = await _db.InvestmentStatusHistory.Where(x => x.InvestmentId == id)
+            .OrderByDescending(x => x.EffectiveDate).ThenByDescending(x => x.CreatedAt).FirstOrDefaultAsync(ct);
+        if (latest is null || request.EffectiveDate >= latest.EffectiveDate) entity.Status = request.Status;
+        await _db.SaveChangesAsync(ct);
+        return MapStatus(status);
+    }
+
+    public async Task<InvestmentPage<InvestmentEntryDto>> GetEntriesAsync(Guid id, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct)
+    {
+        await EnsureInvestmentAsync(id, ct);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var q = _db.InvestmentTransactions.AsNoTracking().Where(x => x.InvestmentId == id && x.OwnerUserId == OwnerId);
+        if (from.HasValue) q = q.Where(x => x.Date >= from);
+        if (to.HasValue) q = q.Where(x => x.Date <= to);
+        var total = await q.CountAsync(ct);
+        var rows = await q.OrderByDescending(x => x.Date).ThenByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return new InvestmentPage<InvestmentEntryDto>(rows.Select(MapEntry).ToList(), page, pageSize, total);
+    }
+
+    public async Task<InvestmentEntryDto> AddEntryAsync(Guid id, SaveInvestmentEntryRequest request, CancellationToken ct)
+    {
+        var investment = await EnsureInvestmentAsync(id, ct);
+        ValidateEntry(investment, request);
+        var entity = NewEntry(id, request);
+        entity.OwnerUserId = OwnerId;
+        var ledger = await _db.InvestmentTransactions.Where(x => x.InvestmentId == id).ToListAsync(ct);
+        ledger.Add(entity);
+        EnsureValidLedger(investment, ledger);
+        _db.InvestmentTransactions.Add(entity);
+        AddAudit(id, "Entry", entity.Id, InvestmentAuditAction.Create, null, Snapshot(entity), null);
+        await _db.SaveChangesAsync(ct);
+        return MapEntry(entity);
+    }
+
+    public async Task<InvestmentEntryDto> UpdateEntryAsync(Guid id, Guid entryId, SaveInvestmentEntryRequest request, CancellationToken ct)
+    {
+        var investment = await EnsureInvestmentAsync(id, ct);
+        ValidateEntry(investment, request);
+        var entity = await _db.InvestmentTransactions.FirstOrDefaultAsync(x => x.Id == entryId && x.InvestmentId == id && x.OwnerUserId == OwnerId, ct)
+            ?? throw new KeyNotFoundException("Investment entry not found.");
+        var old = Snapshot(entity);
+        ApplyEntry(entity, request);
+        var ledger = await _db.InvestmentTransactions.Where(x => x.InvestmentId == id).ToListAsync(ct);
+        EnsureValidLedger(investment, ledger);
+        AddAudit(id, "Entry", entity.Id, InvestmentAuditAction.Update, old, Snapshot(entity),
+            new[] { "type", "date", "note", "quantity", "pricePerUnit", "amount" });
+        await _db.SaveChangesAsync(ct);
+        return MapEntry(entity);
+    }
+
+    public async Task DeleteEntryAsync(Guid id, Guid entryId, CancellationToken ct)
+    {
+        var investment = await EnsureInvestmentAsync(id, ct);
+        var entity = await _db.InvestmentTransactions.FirstOrDefaultAsync(x => x.Id == entryId && x.InvestmentId == id && x.OwnerUserId == OwnerId, ct)
+            ?? throw new KeyNotFoundException("Investment entry not found.");
+        var ledger = await _db.InvestmentTransactions.Where(x => x.InvestmentId == id && x.Id != entryId).ToListAsync(ct);
+        EnsureValidLedger(investment, ledger);
+        AddAudit(id, "Entry", entity.Id, InvestmentAuditAction.Delete, Snapshot(entity), null, null);
+        _db.InvestmentTransactions.Remove(entity);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<InvestmentPage<InvestmentPriceHistoryDto>> GetPricesAsync(Guid id, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct)
+    {
+        var investment = await EnsureInvestmentAsync(id, ct);
+        EnsureUnitBased(investment);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var q = _db.InvestmentPriceHistory.AsNoTracking().Where(x => x.InvestmentId == id && x.OwnerUserId == OwnerId);
+        if (from.HasValue) q = q.Where(x => x.AsOf >= from);
+        if (to.HasValue) q = q.Where(x => x.AsOf <= to);
+        var total = await q.CountAsync(ct);
+        var rows = await q.OrderByDescending(x => x.AsOf).ThenByDescending(x => x.CreatedAt)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return new InvestmentPage<InvestmentPriceHistoryDto>(rows.Select(MapPrice).ToList(), page, pageSize, total);
+    }
+
+    public async Task<InvestmentPriceHistoryDto> AddPriceAsync(Guid id, SaveInvestmentPriceRequest request, CancellationToken ct)
+    {
+        var investment = await EnsureInvestmentAsync(id, ct);
+        EnsureUnitBased(investment);
+        ValidatePrice(request, investment.CreationDate);
+        if (await _db.InvestmentPriceHistory.AnyAsync(x => x.InvestmentId == id && x.AsOf == request.Date, ct))
+            throw new InvalidOperationException("A price entry already exists for this date.");
         var entity = new InvestmentPriceHistory
         {
-            OwnerUserId = owner,
-            InvestmentId = investmentId,
-            AsOf = req.AsOf,
-            Price = req.Price,
-            Note = req.Note?.Trim()
+            OwnerUserId = OwnerId, InvestmentId = id, AsOf = request.Date, Price = request.PricePerUnit
         };
         _db.InvestmentPriceHistory.Add(entity);
+        AddAudit(id, "Price", entity.Id, InvestmentAuditAction.Create, null, Snapshot(entity), null);
         await _db.SaveChangesAsync(ct);
-        return new InvestmentPriceHistoryDto(entity.Id, entity.AsOf, entity.Price, entity.Note);
+        return MapPrice(entity);
     }
 
-    public async Task<InvestmentPriceHistoryDto> UpdatePriceAsync(Guid investmentId, Guid priceId, UpdateInvestmentPriceRequest req, CancellationToken ct)
+    public async Task<InvestmentPriceHistoryDto> UpdatePriceAsync(Guid id, Guid priceId, SaveInvestmentPriceRequest request, CancellationToken ct)
     {
-        if (req.Price <= 0) throw new ArgumentException("Price must be positive.");
-        var owner = OwnerId;
-        var entity = await _db.InvestmentPriceHistory
-            .FirstOrDefaultAsync(p => p.Id == priceId && p.InvestmentId == investmentId && p.OwnerUserId == owner, ct)
+        var investment = await EnsureInvestmentAsync(id, ct);
+        EnsureUnitBased(investment);
+        ValidatePrice(request, investment.CreationDate);
+        if (await _db.InvestmentPriceHistory.AnyAsync(x => x.InvestmentId == id && x.AsOf == request.Date && x.Id != priceId, ct))
+            throw new InvalidOperationException("A price entry already exists for this date.");
+        var entity = await _db.InvestmentPriceHistory.FirstOrDefaultAsync(x => x.Id == priceId && x.InvestmentId == id && x.OwnerUserId == OwnerId, ct)
             ?? throw new KeyNotFoundException("Price entry not found.");
-        entity.AsOf = req.AsOf;
-        entity.Price = req.Price;
-        entity.Note = req.Note?.Trim();
+        var old = Snapshot(entity);
+        entity.AsOf = request.Date;
+        entity.Price = request.PricePerUnit;
+        AddAudit(id, "Price", entity.Id, InvestmentAuditAction.Update, old, Snapshot(entity), new[] { "date", "pricePerUnit" });
         await _db.SaveChangesAsync(ct);
-        return new InvestmentPriceHistoryDto(entity.Id, entity.AsOf, entity.Price, entity.Note);
+        return MapPrice(entity);
     }
 
-    public async Task DeletePriceAsync(Guid investmentId, Guid priceId, CancellationToken ct)
+    public async Task DeletePriceAsync(Guid id, Guid priceId, CancellationToken ct)
     {
-        var owner = OwnerId;
-        var entity = await _db.InvestmentPriceHistory
-            .FirstOrDefaultAsync(p => p.Id == priceId && p.InvestmentId == investmentId && p.OwnerUserId == owner, ct)
+        var investment = await EnsureInvestmentAsync(id, ct);
+        EnsureUnitBased(investment);
+        var entity = await _db.InvestmentPriceHistory.FirstOrDefaultAsync(x => x.Id == priceId && x.InvestmentId == id && x.OwnerUserId == OwnerId, ct)
             ?? throw new KeyNotFoundException("Price entry not found.");
-
-        var count = await _db.InvestmentPriceHistory.CountAsync(p => p.InvestmentId == investmentId, ct);
-        if (count <= 1) throw new InvalidOperationException("An investment must have at least one price entry.");
-
+        AddAudit(id, "Price", entity.Id, InvestmentAuditAction.Delete, Snapshot(entity), null, null);
         _db.InvestmentPriceHistory.Remove(entity);
         await _db.SaveChangesAsync(ct);
     }
 
-    // ===== Buy/sell transactions =====
-    public async Task<InvestmentTxDto> AddTxAsync(Guid investmentId, AddInvestmentTxRequest req, CancellationToken ct)
+    public async Task<InvestmentStatisticsDto> GetStatisticsAsync(Guid id, StatisticsSource source, StatisticsDuration duration, CancellationToken ct)
     {
-        if (req.Units <= 0) throw new ArgumentException("Units must be positive.");
-        var owner = OwnerId;
-        var inv = await _db.Investments.FirstOrDefaultAsync(i => i.Id == investmentId && i.OwnerUserId == owner, ct)
-            ?? throw new KeyNotFoundException("Investment not found.");
-
-        var price = req.Price ?? await ResolvePriceAtAsync(investmentId, req.Date, ct);
-        if (price is null || price <= 0) throw new ArgumentException("Could not resolve a price for that date â€” provide one explicitly.");
-
-        if (req.Type == InvestmentTxType.Sell)
+        var investment = await EnsureInvestmentAsync(id, ct);
+        var from = duration switch
         {
-            // Validate enough units to sell
-            var holding = await ComputeUnitsHoldingAsync(investmentId, ct);
-            if (req.Units > holding + 0.0001m) throw new ArgumentException($"Cannot sell {req.Units} units; only {holding} held.");
-        }
-
-        var entity = new InvestmentTransaction
-        {
-            OwnerUserId = owner,
-            InvestmentId = investmentId,
-            Date = req.Date,
-            Type = req.Type,
-            Units = req.Units,
-            Price = price.Value,
-            Note = req.Note?.Trim()
+            StatisticsDuration.OneMonth => Today.AddMonths(-1),
+            StatisticsDuration.ThreeMonths => Today.AddMonths(-3),
+            StatisticsDuration.SixMonths => Today.AddMonths(-6),
+            StatisticsDuration.OneYear => Today.AddYears(-1),
+            StatisticsDuration.ThreeYears => Today.AddYears(-3),
+            _ => Today.AddYears(-5)
         };
-        _db.InvestmentTransactions.Add(entity);
-
-        await _db.SaveChangesAsync(ct);
-        await UpdateInvestmentStatusAsync(investmentId, ct);
-
-        return new InvestmentTxDto(entity.Id, entity.Date, entity.Type, entity.Units, entity.Price, entity.Units * entity.Price, entity.Note);
-    }
-
-    public async Task<InvestmentTxDto> UpdateTxAsync(Guid investmentId, Guid txId, UpdateInvestmentTxRequest req, CancellationToken ct)
-    {
-        if (req.Units <= 0) throw new ArgumentException("Units must be positive.");
-        var owner = OwnerId;
-        var entity = await _db.InvestmentTransactions
-            .FirstOrDefaultAsync(t => t.Id == txId && t.InvestmentId == investmentId && t.OwnerUserId == owner, ct)
-            ?? throw new KeyNotFoundException("Transaction not found.");
-
-        var price = req.Price ?? await ResolvePriceAtAsync(investmentId, req.Date, ct) ?? entity.Price;
-
-        // Validate sell quantity against holding excluding this row
-        if (req.Type == InvestmentTxType.Sell)
+        if (source == StatisticsSource.Prices)
         {
-            var holdingExcl = await ComputeUnitsHoldingAsync(investmentId, ct, excludingTxId: txId);
-            if (req.Units > holdingExcl + 0.0001m) throw new ArgumentException($"Cannot sell {req.Units} units; only {holdingExcl} held.");
+            EnsureUnitBased(investment);
+            var prices = await _db.InvestmentPriceHistory.AsNoTracking()
+                .Where(x => x.InvestmentId == id && x.AsOf >= from && x.AsOf <= Today)
+                .OrderBy(x => x.AsOf).Select(x => new StatisticsPoint(x.AsOf, x.Price)).ToListAsync(ct);
+            return new InvestmentStatisticsDto("Price per unit", investment.CurrencyCode, prices);
         }
 
-        entity.Date = req.Date;
-        entity.Type = req.Type;
-        entity.Units = req.Units;
-        entity.Price = price;
-        entity.Note = req.Note?.Trim();
-        await _db.SaveChangesAsync(ct);
-        await UpdateInvestmentStatusAsync(investmentId, ct);
-
-        return new InvestmentTxDto(entity.Id, entity.Date, entity.Type, entity.Units, entity.Price, entity.Units * entity.Price, entity.Note);
-    }
-
-    public async Task DeleteTxAsync(Guid investmentId, Guid txId, CancellationToken ct)
-    {
-        var owner = OwnerId;
-        var entity = await _db.InvestmentTransactions
-            .FirstOrDefaultAsync(t => t.Id == txId && t.InvestmentId == investmentId && t.OwnerUserId == owner, ct)
-            ?? throw new KeyNotFoundException("Transaction not found.");
-        _db.InvestmentTransactions.Remove(entity);
-        await _db.SaveChangesAsync(ct);
-        await UpdateInvestmentStatusAsync(investmentId, ct);
-    }
-
-    // ===== Reports =====
-    public async Task<InvestmentReport> GetReportAsync(InvestmentStatus? status, CancellationToken ct)
-    {
-        var owner = OwnerId;
-        var list = await ListAsync(status, null, null, ct);
-        var rows = list.Select(i => new InvestmentReportRow(
-            i.GroupName, i.Name, i.Unit, i.Tag?.Name, i.Status.ToString(),
-            i.UnitsHolding, i.CurrentPrice ?? 0, i.CurrentHoldingValue, i.Invested, i.ProfitLoss
-        )).ToList();
-        return new InvestmentReport(rows);
-    }
-
-    // ===== Helpers =====
-    private async Task ValidateTagAsync(Guid owner, Guid? tagId, CancellationToken ct)
-    {
-        if (!tagId.HasValue) return;
-        var ok = await _db.AssetTags.AnyAsync(t => t.Id == tagId.Value && t.OwnerUserId == owner, ct);
-        if (!ok) throw new KeyNotFoundException("Tag not found.");
-    }
-
-    /// <summary>Returns the price effective on or before the given date, falling back to the earliest entry.</summary>
-    private async Task<decimal?> ResolvePriceAtAsync(Guid investmentId, DateOnly date, CancellationToken ct)
-    {
-        var owner = OwnerId;
-        var atOrBefore = await _db.InvestmentPriceHistory
-            .Where(p => p.InvestmentId == investmentId && p.OwnerUserId == owner && p.AsOf <= date)
-            .OrderByDescending(p => p.AsOf).ThenByDescending(p => p.CreatedAt)
-            .Select(p => (decimal?)p.Price)
-            .FirstOrDefaultAsync(ct);
-        if (atOrBefore is not null) return atOrBefore;
-
-        // Fall back to earliest if no entry on/before
-        return await _db.InvestmentPriceHistory
-            .Where(p => p.InvestmentId == investmentId && p.OwnerUserId == owner)
-            .OrderBy(p => p.AsOf).ThenBy(p => p.CreatedAt)
-            .Select(p => (decimal?)p.Price)
-            .FirstOrDefaultAsync(ct);
-    }
-
-    private async Task<decimal> ComputeUnitsHoldingAsync(Guid investmentId, CancellationToken ct, Guid? excludingTxId = null)
-    {
-        var owner = OwnerId;
-        var q = _db.InvestmentTransactions.Where(t => t.InvestmentId == investmentId && t.OwnerUserId == owner);
-        if (excludingTxId.HasValue) q = q.Where(t => t.Id != excludingTxId.Value);
-        var bought = await q.Where(t => t.Type == InvestmentTxType.Buy).SumAsync(t => (decimal?)t.Units, ct) ?? 0m;
-        var sold = await q.Where(t => t.Type == InvestmentTxType.Sell).SumAsync(t => (decimal?)t.Units, ct) ?? 0m;
-        return bought - sold;
-    }
-
-    private async Task UpdateInvestmentStatusAsync(Guid investmentId, CancellationToken ct)
-    {
-        var inv = await _db.Investments.FirstOrDefaultAsync(i => i.Id == investmentId, ct);
-        if (inv is null) return;
-        var holding = await ComputeUnitsHoldingAsync(investmentId, ct);
-        var desired = holding > 0 ? InvestmentStatus.Active : InvestmentStatus.Inactive;
-        if (inv.Status != desired)
+        var entries = await _db.InvestmentTransactions.AsNoTracking().Where(x => x.InvestmentId == id && x.Date <= Today)
+            .OrderBy(x => x.Date).ThenBy(x => x.CreatedAt).ToListAsync(ct);
+        decimal running = 0;
+        var points = new List<StatisticsPoint>();
+        foreach (var entry in entries)
         {
-            inv.Status = desired;
-            await _db.SaveChangesAsync(ct);
+            running += investment.InvestmentType == InvestmentType.UnitBased
+                ? entry.Type == InvestmentTxType.Buy ? entry.Units : -entry.Units
+                : entry.Type == InvestmentTxType.Credit ? entry.Amount ?? 0 : -(entry.Amount ?? 0);
+            if (entry.Date >= from) points.Add(new StatisticsPoint(entry.Date, running));
+        }
+        return new InvestmentStatisticsDto(
+            investment.InvestmentType == InvestmentType.UnitBased ? "Units held" : "Investment balance",
+            investment.CurrencyCode, points);
+    }
+
+    public async Task<IReadOnlyList<InvestmentExportRow>> GetExportAsync(InvestmentExportRequest request, CancellationToken ct)
+    {
+        if (request.InvestmentIds.Count == 0) throw new ArgumentException("Select at least one investment.");
+        if (request.To < request.From) throw new ArgumentException("The end date must be on or after the start date.");
+        if (request.To > request.From.AddYears(3)) throw new ArgumentException("Export duration cannot exceed three years.");
+        var investments = await _db.Investments.AsNoTracking()
+            .Include(x => x.Transactions).Include(x => x.PriceHistory).Include(x => x.StatusHistory)
+            .Where(x => x.OwnerUserId == OwnerId && request.InvestmentIds.Contains(x.Id)).ToListAsync(ct);
+        if (investments.Count != request.InvestmentIds.Distinct().Count())
+            throw new KeyNotFoundException("One or more investments were not found.");
+
+        var rows = new List<InvestmentExportRow>();
+        foreach (var investment in investments.OrderBy(x => x.Name))
+        {
+            rows.AddRange(investment.Transactions.Where(x => x.Date >= request.From && x.Date <= request.To)
+                .Select(x => new InvestmentExportRow(investment.Name, x.Type.ToString(), x.Date, investment.CurrencyCode,
+                    x.Note ?? string.Empty, x.Type is InvestmentTxType.Buy or InvestmentTxType.Sell ? x.Units : null,
+                    x.Type is InvestmentTxType.Buy or InvestmentTxType.Sell ? x.Price : null,
+                    x.Type is InvestmentTxType.Credit or InvestmentTxType.Debit ? x.Amount : x.Units * x.Price)));
+            rows.AddRange(investment.PriceHistory.Where(x => x.AsOf >= request.From && x.AsOf <= request.To)
+                .Select(x => new InvestmentExportRow(investment.Name, "Price", x.AsOf, investment.CurrencyCode,
+                    "Price per unit", null, x.Price, null)));
+            rows.AddRange(investment.StatusHistory.Where(x => x.EffectiveDate >= request.From && x.EffectiveDate <= request.To)
+                .Select(x => new InvestmentExportRow(investment.Name, "Status", x.EffectiveDate, investment.CurrencyCode,
+                    x.Status.ToString(), null, null, null)));
+        }
+        return rows.OrderBy(x => x.Investment).ThenBy(x => x.Date).ToList();
+    }
+
+    private IQueryable<Investment> InvestmentQuery(Guid id) => _db.Investments
+        .Include(x => x.Tag).Include(x => x.Transactions).Include(x => x.PriceHistory)
+        .Where(x => x.Id == id && x.OwnerUserId == OwnerId);
+
+    private async Task<Investment> EnsureInvestmentAsync(Guid id, CancellationToken ct) =>
+        await _db.Investments.FirstOrDefaultAsync(x => x.Id == id && x.OwnerUserId == OwnerId, ct)
+        ?? throw new KeyNotFoundException("Investment not found.");
+
+    private async Task<Guid> GetLegacyGroupIdAsync(Guid owner, CancellationToken ct)
+    {
+        var group = await _db.InvestmentGroups.FirstOrDefaultAsync(x => x.OwnerUserId == owner && x.Name == "Ungrouped", ct);
+        if (group is not null) return group.Id;
+        group = new InvestmentGroup { OwnerUserId = owner, Name = "Ungrouped", Status = InvestmentStatus.Active };
+        _db.InvestmentGroups.Add(group);
+        return group.Id;
+    }
+
+    private async Task ValidateTagAsync(Guid? tagId, CancellationToken ct)
+    {
+        if (tagId.HasValue && !await _db.AssetTags.AnyAsync(x => x.Id == tagId && x.OwnerUserId == OwnerId, ct))
+            throw new KeyNotFoundException("Tag not found.");
+    }
+
+    private static void ValidateInvestment(string name, string? description, string currency, DateOnly? creationDate)
+    {
+        var n = name?.Trim() ?? string.Empty;
+        if (n.Length is < 2 or > 100) throw new ArgumentException("Name must contain between 2 and 100 characters.");
+        if ((description?.Trim().Length ?? 0) > 500) throw new ArgumentException("Description must not exceed 500 characters.");
+        if (!string.Equals(currency, "INR", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Only INR is currently supported.");
+        if (creationDate.HasValue && creationDate.Value > Today) throw new ArgumentException("Creation date cannot be in the future.");
+    }
+
+    private static void ValidateDate(DateOnly date, DateOnly creationDate)
+    {
+        if (date < creationDate) throw new ArgumentException("Date cannot be before the investment creation date.");
+        if (date > Today) throw new ArgumentException("Date cannot be in the future.");
+    }
+
+    private static void ValidateEntry(Investment investment, SaveInvestmentEntryRequest request)
+    {
+        ValidateDate(request.Date, investment.CreationDate);
+        if ((request.Note?.Trim().Length ?? 0) > 200) throw new ArgumentException("Note must not exceed 200 characters.");
+        if (investment.InvestmentType == InvestmentType.UnitBased)
+        {
+            if (request.Type is not (InvestmentTxType.Buy or InvestmentTxType.Sell))
+                throw new ArgumentException("Unit-based investments support only Buy and Sell entries.");
+            if (request.Quantity is null or <= 0) throw new ArgumentException("Quantity must be greater than zero.");
+            if (request.PricePerUnit is null or <= 0) throw new ArgumentException("Price per unit must be greater than zero.");
+        }
+        else
+        {
+            if (request.Type is not (InvestmentTxType.Credit or InvestmentTxType.Debit))
+                throw new ArgumentException("Amount-based investments support only Credit and Debit entries.");
+            if (request.Amount is null or <= 0) throw new ArgumentException("Amount must be greater than zero.");
         }
     }
 
-    private record Metrics(
-        Guid InvestmentId,
-        Guid GroupId,
-        decimal? CurrentPrice,
-        DateOnly? LastPriceAsOf,
-        decimal UnitsHolding,
-        decimal AverageBuyPrice,
-        decimal CurrentValue,
-        decimal Invested,
-        decimal ProfitLoss);
-
-    private async Task<IReadOnlyList<Metrics>> ComputeAllInvestmentMetricsAsync(Guid owner, CancellationToken ct)
+    private static void ValidatePrice(SaveInvestmentPriceRequest request, DateOnly creationDate)
     {
-        var ids = await _db.Investments.Where(i => i.OwnerUserId == owner).Select(i => i.Id).ToListAsync(ct);
-        var map = await ComputeMetricsForAsync(ids, ct);
-        return ids.Select(id => map[id]).ToList();
+        ValidateDate(request.Date, creationDate);
+        if (request.PricePerUnit < 0) throw new ArgumentException("Price per unit cannot be negative.");
     }
 
-    private async Task<Dictionary<Guid, Metrics>> ComputeMetricsForAsync(IReadOnlyList<Guid> investmentIds, CancellationToken ct)
+    private static void EnsureUnitBased(Investment investment)
     {
-        if (investmentIds.Count == 0) return new Dictionary<Guid, Metrics>();
-        var owner = OwnerId;
+        if (investment.InvestmentType != InvestmentType.UnitBased)
+            throw new InvalidOperationException("Price history is available only for unit-based investments.");
+    }
 
-        var investments = await _db.Investments
-            .Where(i => investmentIds.Contains(i.Id) && i.OwnerUserId == owner)
-            .Select(i => new { i.Id, i.GroupId })
-            .ToListAsync(ct);
+    private static InvestmentTransaction NewEntry(Guid investmentId, SaveInvestmentEntryRequest request)
+    {
+        var entity = new InvestmentTransaction { InvestmentId = investmentId };
+        ApplyEntry(entity, request);
+        return entity;
+    }
 
-        var prices = await _db.InvestmentPriceHistory
-            .Where(p => investmentIds.Contains(p.InvestmentId) && p.OwnerUserId == owner)
-            .Select(p => new { p.InvestmentId, p.AsOf, p.Price, p.CreatedAt })
-            .ToListAsync(ct);
+    private static void ApplyEntry(InvestmentTransaction entity, SaveInvestmentEntryRequest request)
+    {
+        entity.Type = request.Type;
+        entity.Date = request.Date;
+        entity.Note = Clean(request.Note);
+        entity.Units = request.Quantity ?? 0;
+        entity.Price = request.PricePerUnit ?? 0;
+        entity.Amount = request.Amount;
+    }
 
-        var txs = await _db.InvestmentTransactions
-            .Where(t => investmentIds.Contains(t.InvestmentId) && t.OwnerUserId == owner)
-            .Select(t => new { t.InvestmentId, t.Type, t.Units, t.Price })
-            .ToListAsync(ct);
-
-        var map = new Dictionary<Guid, Metrics>(investmentIds.Count);
-        foreach (var inv in investments)
+    private static void EnsureValidLedger(Investment investment, IEnumerable<InvestmentTransaction> entries)
+    {
+        decimal balance = 0;
+        foreach (var entry in entries.OrderBy(x => x.Date).ThenBy(x => x.CreatedAt).ThenBy(x => x.Id))
         {
-            var latest = prices
-                .Where(p => p.InvestmentId == inv.Id)
-                .OrderByDescending(p => p.AsOf).ThenByDescending(p => p.CreatedAt)
-                .FirstOrDefault();
-
-            var iTxs = txs.Where(t => t.InvestmentId == inv.Id).ToList();
-            var totalBuyUnits = iTxs.Where(t => t.Type == InvestmentTxType.Buy).Sum(t => t.Units);
-            var totalBuyCost = iTxs.Where(t => t.Type == InvestmentTxType.Buy).Sum(t => t.Units * t.Price);
-            var totalSellUnits = iTxs.Where(t => t.Type == InvestmentTxType.Sell).Sum(t => t.Units);
-            var avgBuy = totalBuyUnits > 0 ? totalBuyCost / totalBuyUnits : 0m;
-            var unitsHolding = totalBuyUnits - totalSellUnits;
-            var invested = unitsHolding > 0 ? unitsHolding * avgBuy : 0m;
-            var currentPrice = latest?.Price ?? 0m;
-            var currentValue = unitsHolding > 0 ? unitsHolding * currentPrice : 0m;
-            var profitLoss = currentValue - invested;
-
-            map[inv.Id] = new Metrics(
-                inv.Id, inv.GroupId,
-                latest is null ? null : (decimal?)latest.Price,
-                latest is null ? null : (DateOnly?)latest.AsOf,
-                unitsHolding, avgBuy, currentValue, invested, profitLoss);
+            balance += investment.InvestmentType == InvestmentType.UnitBased
+                ? entry.Type == InvestmentTxType.Buy ? entry.Units : -entry.Units
+                : entry.Type == InvestmentTxType.Credit ? entry.Amount ?? 0 : -(entry.Amount ?? 0);
+            if (balance < 0) throw new InvalidOperationException(
+                investment.InvestmentType == InvestmentType.UnitBased
+                    ? $"The entry would make unit holdings negative on {entry.Date:yyyy-MM-dd}."
+                    : $"The entry would make the investment balance negative on {entry.Date:yyyy-MM-dd}.");
         }
-        return map;
     }
+
+    private static InvestmentDto Map(Investment entity)
+    {
+        var metrics = ComputeMetrics(entity);
+        return new InvestmentDto(entity.Id, entity.Name, entity.Description,
+            entity.Tag is null ? null : new AssetTagBadge(entity.Tag.Id, entity.Tag.Name, entity.Tag.Color),
+            entity.InvestmentType, entity.CurrencyCode, entity.CreationDate, entity.Status,
+            metrics.Units, metrics.AmountInvested, metrics.CurrentPrice, metrics.CurrentValue,
+            metrics.CostBasis, metrics.ProfitLossPercent);
+    }
+
+    private static Metrics ComputeMetrics(Investment entity)
+    {
+        if (entity.InvestmentType == InvestmentType.AmountBased)
+        {
+            var amount = entity.Transactions.Sum(x => x.Type == InvestmentTxType.Credit ? x.Amount ?? 0 : -(x.Amount ?? 0));
+            return new Metrics(0, amount, null, amount, amount, null);
+        }
+        decimal units = 0;
+        decimal basis = 0;
+        foreach (var entry in entity.Transactions.OrderBy(x => x.Date).ThenBy(x => x.CreatedAt))
+        {
+            if (entry.Type == InvestmentTxType.Buy)
+            {
+                units += entry.Units;
+                basis += entry.Units * entry.Price;
+            }
+            else if (entry.Type == InvestmentTxType.Sell && units > 0)
+            {
+                var average = basis / units;
+                units -= entry.Units;
+                basis -= average * entry.Units;
+                if (units == 0) basis = 0;
+            }
+        }
+        var latest = entity.PriceHistory.OrderByDescending(x => x.AsOf).ThenByDescending(x => x.CreatedAt).FirstOrDefault();
+        var currentPrice = latest?.Price;
+        var value = units * (currentPrice ?? 0);
+        decimal? percent = basis > 0 ? (value - basis) / basis * 100 : null;
+        return new Metrics(units, basis, currentPrice, value, basis, percent);
+    }
+
+    private void AddAudit(Guid investmentId, string entityType, Guid entityId, InvestmentAuditAction action,
+        string? oldValues, string? newValues, IEnumerable<string>? changedFields)
+    {
+        _db.InvestmentAuditEntries.Add(new InvestmentAuditEntry
+        {
+            OwnerUserId = OwnerId,
+            InvestmentId = investmentId,
+            EntityType = entityType,
+            EntityId = entityId,
+            Action = action,
+            OldValuesJson = oldValues,
+            NewValuesJson = newValues,
+            ChangedFieldsJson = changedFields is null ? null : JsonSerializer.Serialize(changedFields)
+        });
+    }
+
+    private static string Snapshot(Investment x) => JsonSerializer.Serialize(new
+        { x.Id, x.Name, x.Description, x.TagId, x.InvestmentType, x.CurrencyCode, x.CreationDate, x.Status });
+    private static string Snapshot(InvestmentTransaction x) => JsonSerializer.Serialize(new
+        { x.Id, x.InvestmentId, x.Type, x.Date, x.Note, Quantity = x.Units, PricePerUnit = x.Price, x.Amount });
+    private static string Snapshot(InvestmentPriceHistory x) => JsonSerializer.Serialize(new
+        { x.Id, x.InvestmentId, Date = x.AsOf, PricePerUnit = x.Price });
+    private static string Snapshot(InvestmentStatusHistory x) => JsonSerializer.Serialize(new
+        { x.Id, x.InvestmentId, x.Status, x.EffectiveDate });
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static InvestmentEntryDto MapEntry(InvestmentTransaction x) => new(x.Id, x.Date, x.Type, x.Note,
+        x.Type is InvestmentTxType.Buy or InvestmentTxType.Sell ? x.Units : null,
+        x.Type is InvestmentTxType.Buy or InvestmentTxType.Sell ? x.Price : null,
+        x.Type is InvestmentTxType.Credit or InvestmentTxType.Debit ? x.Amount ?? 0 : x.Units * x.Price);
+    private static InvestmentPriceHistoryDto MapPrice(InvestmentPriceHistory x) => new(x.Id, x.AsOf, x.Price);
+    private static InvestmentStatusDto MapStatus(InvestmentStatusHistory x) => new(x.Id, x.Status, x.EffectiveDate);
+    private record Metrics(decimal Units, decimal AmountInvested, decimal? CurrentPrice, decimal CurrentValue, decimal CostBasis, decimal? ProfitLossPercent);
 }

@@ -34,6 +34,10 @@ export class PeriodicTasksApi {
     return this.http.delete<void>(`${this.base}/periodic-groups/${id}`);
   }
 
+  reorderGroups(req: { groupId: string; displayOrder: number }[]): Observable<void> {
+    return this.http.put<void>(`${this.base}/periodic-groups/reorder`, req);
+  }
+
   getTasks(includeInactive = false): Observable<PeriodicTask[]> {
     let params = new HttpParams();
     if (includeInactive) params = params.set('includeInactive', 'true');
@@ -66,8 +70,12 @@ export class PeriodicTasksApi {
     return this.http.put<PeriodicTask>(`${this.base}/periodic-tasks/${id}`, req);
   }
 
-  deleteTask(id: string): Observable<void> {
-    return this.http.delete<void>(`${this.base}/periodic-tasks/${id}`);
+  deleteTask(id: string, confirmationTitle: string): Observable<void> {
+    return this.http.delete<void>(`${this.base}/periodic-tasks/${id}`, { body: { confirmationTitle } });
+  }
+
+  reorderTasks(req: { taskId: string; groupId: string; displayOrder: number }[]): Observable<void> {
+    return this.http.put<void>(`${this.base}/periodic-tasks/reorder`, req);
   }
 
   addHistory(taskId: string, body: { completedOn: string; note: string | null }): Observable<PeriodicHistory> {

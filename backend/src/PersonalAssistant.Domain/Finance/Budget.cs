@@ -11,4 +11,14 @@ public class Budget : EntityBase
     public DateOnly From { get; set; }
     public DateOnly To { get; set; }
     public string? Note { get; set; }
+    public ICollection<BudgetEntry> Entries { get; set; } = new List<BudgetEntry>();
+}
+
+public class BudgetEntry : EntityBase
+{
+    public Guid BudgetId { get; set; }
+    public Budget? Budget { get; set; }
+    public Guid CategoryId { get; set; }
+    public Category? Category { get; set; }
+    public decimal Amount { get; set; }
 }
